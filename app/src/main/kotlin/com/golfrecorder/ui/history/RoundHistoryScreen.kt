@@ -1,7 +1,9 @@
 package com.golfrecorder.ui.history
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,6 +15,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,13 +31,18 @@ import com.golfrecorder.data.repository.RoundRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class RoundHistoryViewModel(roundRepository: RoundRepository) : ViewModel() {
+class RoundHistoryViewModel(private val roundRepository: RoundRepository) : ViewModel() {
     val rounds: StateFlow<List<RoundSummary>> = roundRepository.getRoundSummaries()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun delete(roundId: Long) {
+        viewModelScope.launch { roundRepository.deleteRound(roundId) }
+    }
 }
 
 class RoundHistoryViewModelFactory(
@@ -71,14 +79,18 @@ fun RoundHistoryScreen(
         }
         LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
             items(rounds, key = { it.roundId }) { round ->
-                Column(
+                Row(
                     modifier = Modifier.fillMaxWidth().clickable { onRoundClick(round) }.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(round.courseName, fontWeight = FontWeight.Bold)
-                    Text(
-                        "${dateFormat.format(Date(round.playedAt))} · 총 ${round.totalStrokes}타",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Column {
+                        Text(round.courseName, fontWeight = FontWeight.Bold)
+                        Text(
+                            "${dateFormat.format(Date(round.playedAt))} · 총 ${round.totalStrokes}타",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    TextButton(onClick = { viewModel.delete(round.roundId) }) { Text("삭제") }
                 }
                 HorizontalDivider()
             }
