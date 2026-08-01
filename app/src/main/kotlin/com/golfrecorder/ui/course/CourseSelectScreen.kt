@@ -34,7 +34,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class CourseSelectViewModel(
-    courseRepository: CourseRepository,
+    private val courseRepository: CourseRepository,
     private val roundRepository: RoundRepository,
 ) : ViewModel() {
     val courses: StateFlow<List<CourseEntity>> = courseRepository.getCourses()
@@ -45,6 +45,10 @@ class CourseSelectViewModel(
             val roundId = roundRepository.startRound(courseId, System.currentTimeMillis())
             onStarted(roundId)
         }
+    }
+
+    fun delete(courseId: Long) {
+        viewModelScope.launch { courseRepository.deleteCourse(courseId) }
     }
 }
 
@@ -95,7 +99,12 @@ fun CourseSelectScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(course.name, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = { onEditCourse(course.id) }) { Text("수정") }
+                    Row {
+                        TextButton(onClick = { onEditCourse(course.id) }) { Text("수정") }
+                        TextButton(onClick = { viewModel.delete(course.id) }) {
+                            Text("삭제", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 }
                 HorizontalDivider()
             }
