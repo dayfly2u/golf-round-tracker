@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 깃대 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M58,22h4v52h-4z" />
+    <!-- 깃발 -->
+    <path
+        android:fillColor="#E53935"
+        android:pathData="M62,24 L62,38 L86,31 Z" />
+    <!-- 골프공 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,68 A10,10 0 1 0 38,88 A10,10 0 1 0 38,68 Z" />
+    <!-- 딤플 -->
+    <path
+        android:fillColor="#C8C8C8"
+        android:pathData="M34,74.5 A1.5,1.5 0 1 0 34,77.5 A1.5,1.5 0 1 0 34,74.5 Z" />
+    <path
+        android:fillColor="#C8C8C8"
+        android:pathData="M42,74.5 A1.5,1.5 0 1 0 42,77.5 A1.5,1.5 0 1 0 42,74.5 Z" />
+    <path
+        android:fillColor="#C8C8C8"
+        android:pathData="M38,80.5 A1.5,1.5 0 1 0 38,83.5 A1.5,1.5 0 1 0 38,80.5 Z" />
+</vector>
