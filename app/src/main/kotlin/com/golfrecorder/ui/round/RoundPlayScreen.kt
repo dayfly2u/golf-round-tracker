@@ -123,7 +123,12 @@ class RoundPlayViewModel(
     }
 
     fun finishRound(onFinished: () -> Unit) {
-        saveCurrentHole(onFinished)
+        saveCurrentHole {
+            viewModelScope.launch {
+                roundRepository.finishRound(roundId, System.currentTimeMillis())
+                onFinished()
+            }
+        }
     }
 
     private fun saveCurrentHole(after: () -> Unit) {

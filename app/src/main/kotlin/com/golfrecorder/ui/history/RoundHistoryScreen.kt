@@ -54,6 +54,14 @@ class RoundHistoryViewModelFactory(
 }
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
+private val timeFormat = SimpleDateFormat("HH:mm", Locale.KOREA)
+
+private fun formatRoundPeriod(playedAt: Long, finishedAt: Long?): String {
+    val date = dateFormat.format(Date(playedAt))
+    val start = timeFormat.format(Date(playedAt))
+    val end = finishedAt?.let { timeFormat.format(Date(it)) }
+    return if (end != null) "$date $start~$end" else "$date $start~"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,7 +94,7 @@ fun RoundHistoryScreen(
                     Column {
                         Text(round.courseName, fontWeight = FontWeight.Bold)
                         Text(
-                            "${dateFormat.format(Date(round.playedAt))} · 총 ${round.totalStrokes}타",
+                            "${formatRoundPeriod(round.playedAt, round.finishedAt)} · 총 ${round.totalStrokes}타",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }

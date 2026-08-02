@@ -21,5 +21,6 @@ data class RoundEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val courseId: Long,
     val playedAt: Long,
+    val finishedAt: Long? = null,
     val memo: String? = null
 )

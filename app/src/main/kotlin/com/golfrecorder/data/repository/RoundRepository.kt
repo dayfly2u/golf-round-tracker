@@ -12,6 +12,9 @@ class RoundRepository(private val roundDao: RoundDao) {
     suspend fun startRound(courseId: Long, playedAt: Long, memo: String? = null): Long =
         roundDao.insertRound(RoundEntity(courseId = courseId, playedAt = playedAt, memo = memo))
 
+    suspend fun finishRound(roundId: Long, finishedAt: Long) =
+        roundDao.updateFinishedAt(roundId, finishedAt)
+
     suspend fun saveHoleRecord(
         roundId: Long,
         holeNumber: Int,
