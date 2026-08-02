@@ -1,36 +1,78 @@
 package com.golfrecorder.ui.common
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
-/** 라운드 중 필드에서 큰 터치 영역으로 타수를 올리고 내리는 카운터. */
+/**
+ * 라운드 중 필드에서 큰 터치 영역으로 타수를 올리고 내리는 카운터.
+ *
+ * [buttonColor]를 주면 그 항목의 +/- 버튼에만 색이 들어간다(라벨은 항상 기본색).
+ * OB/해저드처럼 한 줄에 두 개를 나란히 두는 축소 크기는 [compact]로 켠다 —
+ * 라벨은 고정 너비 없이 글자 길이만큼만 차지해서 짧은 라벨("OB") 뒤에 버튼이
+ * 바로 붙는다.
+ */
 @Composable
 fun StrokeStepper(
     label: String,
     value: Int,
     onValueChange: (Int) -> Unit,
     minValue: Int = 0,
+    buttonColor: Color? = null,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, modifier = Modifier.width(140.dp))
+    val valueWidth = if (compact) 20.dp else 56.dp
+    val buttonPadding = if (compact) {
+        PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+    } else {
+        ButtonDefaults.ContentPadding
+    }
+    val buttonHeight = if (compact) 28.dp else ButtonDefaults.MinHeight
+    val buttonTextStyle = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge
+    val buttonColors = if (buttonColor != null) {
+        ButtonDefaults.buttonColors(containerColor = buttonColor)
+    } else {
+        ButtonDefaults.buttonColors()
+    }
+
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            modifier = if (compact) Modifier.padding(end = 4.dp) else Modifier.width(140.dp),
+        )
         Button(
             onClick = { if (value > minValue) onValueChange(value - 1) },
             enabled = value > minValue,
-        ) { Text("−") }
+            colors = buttonColors,
+            contentPadding = buttonPadding,
+            modifier = Modifier.height(buttonHeight),
+        ) { Text("−", style = buttonTextStyle) }
         Text(
             "$value",
-            style = MaterialTheme.typography.headlineMedium,
+            style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
-            modifier = Modifier.width(56.dp),
+            modifier = Modifier.width(valueWidth),
         )
-        Button(onClick = { onValueChange(value + 1) }) { Text("+") }
+        Button(
+            onClick = { onValueChange(value + 1) },
+            colors = buttonColors,
+            contentPadding = buttonPadding,
+            modifier = Modifier.height(buttonHeight),
+        ) { Text("+", style = buttonTextStyle) }
     }
 }

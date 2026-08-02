@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -27,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,6 +64,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+// 지도의 벌타 마커 색과 맞춘다 (CourseMapView의 ic_penalty_ob/ic_penalty_hazard).
+private val PENALTY_OB_COLOR = Color(0xFFFB8C00)
+private val PENALTY_HAZARD_COLOR = Color(0xFF2E7D32)
 
 class RoundPlayViewModel(
     private val roundRepository: RoundRepository,
@@ -355,21 +361,27 @@ fun RoundPlayScreen(
                 },
             )
             Spacer(Modifier.height(4.dp))
-            StrokeStepper(
-                label = "OB",
-                value = obToGreenCount,
-                onValueChange = { newValue ->
-                    onPenaltyChange(ShotPhase.TO_GREEN, PenaltyType.OB, obToGreenCount, newValue)
-                },
-            )
-            Spacer(Modifier.height(4.dp))
-            StrokeStepper(
-                label = "해저드",
-                value = hazardToGreenCount,
-                onValueChange = { newValue ->
-                    onPenaltyChange(ShotPhase.TO_GREEN, PenaltyType.HAZARD, hazardToGreenCount, newValue)
-                },
-            )
+            Row {
+                StrokeStepper(
+                    label = "OB",
+                    value = obToGreenCount,
+                    buttonColor = PENALTY_OB_COLOR,
+                    compact = true,
+                    onValueChange = { newValue ->
+                        onPenaltyChange(ShotPhase.TO_GREEN, PenaltyType.OB, obToGreenCount, newValue)
+                    },
+                )
+                Spacer(Modifier.width(20.dp))
+                StrokeStepper(
+                    label = "해저드",
+                    value = hazardToGreenCount,
+                    buttonColor = PENALTY_HAZARD_COLOR,
+                    compact = true,
+                    onValueChange = { newValue ->
+                        onPenaltyChange(ShotPhase.TO_GREEN, PenaltyType.HAZARD, hazardToGreenCount, newValue)
+                    },
+                )
+            }
             Spacer(Modifier.height(16.dp))
             StrokeStepper(
                 label = "숏게임+퍼팅",
