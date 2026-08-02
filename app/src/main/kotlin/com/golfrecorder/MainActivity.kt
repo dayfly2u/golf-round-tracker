@@ -116,6 +116,7 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
                     container.roundRepository,
                     container.courseRepository,
                     container.shotRepository,
+                    container.penaltyRepository,
                     screen.roundId,
                     screen.courseId,
                     screen.holeNumber,

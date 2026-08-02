@@ -5,11 +5,13 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.golfrecorder.data.local.dao.CourseDao
+import com.golfrecorder.data.local.dao.PenaltyDao
 import com.golfrecorder.data.local.dao.RoundDao
 import com.golfrecorder.data.local.dao.ShotDao
 import com.golfrecorder.data.local.entity.CourseEntity
 import com.golfrecorder.data.local.entity.HoleEntity
 import com.golfrecorder.data.local.entity.HoleRecordEntity
+import com.golfrecorder.data.local.entity.PenaltyEntity
 import com.golfrecorder.data.local.entity.RoundEntity
 import com.golfrecorder.data.local.entity.ShotEntity
 
@@ -20,8 +22,9 @@ import com.golfrecorder.data.local.entity.ShotEntity
         RoundEntity::class,
         HoleRecordEntity::class,
         ShotEntity::class,
+        PenaltyEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,6 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
     abstract fun roundDao(): RoundDao
     abstract fun shotDao(): ShotDao
+    abstract fun penaltyDao(): PenaltyDao
 
     companion object {
         @Volatile

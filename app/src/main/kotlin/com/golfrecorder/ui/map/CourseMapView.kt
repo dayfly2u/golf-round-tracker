@@ -2,6 +2,7 @@ package com.golfrecorder.ui.map
 
 import android.graphics.Color
 import com.golfrecorder.R
+import com.golfrecorder.domain.model.PenaltyType
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.kakao.vectormap.KakaoMap
@@ -17,6 +18,9 @@ import com.kakao.vectormap.shape.ShapeLayerPass
 
 data class ShotPoint(val phase: ShotPhase, val lat: Double, val lng: Double)
 
+/** OB/해저드는 순수 벌타라 실제 '샷'이 아니다 — 선으로 연결하지 않고 위치만 표시한다. */
+data class PenaltyPoint(val type: PenaltyType, val lat: Double, val lng: Double)
+
 // ic_dot_red.png / ic_dot_blue.png와 동일한 색상 (선 색을 원 색상과 맞추기 위함).
 private const val SHOT_RED = "#E53935"
 private const val SHOT_BLUE = "#1E88E5"
@@ -26,7 +30,12 @@ internal const val MAP_ZOOM_LEVEL = 16
 
 private const val SHOT_LINE_LAYER_ID = "shot-lines"
 
-internal fun drawOverlays(map: KakaoMap, greenLocation: AppLatLng?, shots: List<ShotPoint>) {
+internal fun drawOverlays(
+    map: KakaoMap,
+    greenLocation: AppLatLng?,
+    shots: List<ShotPoint>,
+    penalties: List<PenaltyPoint>,
+) {
     val labelLayer = map.labelManager?.layer ?: return
 
     // 기본 shape 레이어(ShapeLayerPass.Default)는 "지도와 배경 사이"에 그려져서
@@ -77,5 +86,16 @@ internal fun drawOverlays(map: KakaoMap, greenLocation: AppLatLng?, shots: List<
     shots.forEach { shot ->
         val styles = if (shot.phase == ShotPhase.TO_GREEN) toGreenStyles else shortGameStyles
         labelLayer.addLabel(LabelOptions.from(LatLng.from(shot.lat, shot.lng)).setStyles(styles))
+    }
+
+    val obStyles = map.labelManager?.addLabelStyles(
+        LabelStyles.from("penalty-ob", LabelStyle.from(R.drawable.ic_penalty_ob).setAnchorPoint(0.5f, 0.5f))
+    )
+    val hazardStyles = map.labelManager?.addLabelStyles(
+        LabelStyles.from("penalty-hazard", LabelStyle.from(R.drawable.ic_penalty_hazard).setAnchorPoint(0.5f, 0.5f))
+    )
+    penalties.forEach { penalty ->
+        val styles = if (penalty.type == PenaltyType.OB) obStyles else hazardStyles
+        labelLayer.addLabel(LabelOptions.from(LatLng.from(penalty.lat, penalty.lng)).setStyles(styles))
     }
 }

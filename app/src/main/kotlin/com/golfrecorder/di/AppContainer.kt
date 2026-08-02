@@ -3,6 +3,7 @@ package com.golfrecorder.di
 import android.content.Context
 import com.golfrecorder.data.local.AppDatabase
 import com.golfrecorder.data.repository.CourseRepository
+import com.golfrecorder.data.repository.PenaltyRepository
 import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.data.repository.ShotRepository
 
@@ -19,6 +20,8 @@ class AppContainer(context: Context) {
     val roundRepository: RoundRepository = RoundRepository(database.roundDao())
 
     val shotRepository: ShotRepository = ShotRepository(database.shotDao())
+
+    val penaltyRepository: PenaltyRepository = PenaltyRepository(database.penaltyDao())
 
     companion object {
         @Volatile private var instance: AppContainer? = null

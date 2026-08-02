@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -33,16 +35,20 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.golfrecorder.data.local.entity.HoleEntity
+import com.golfrecorder.data.local.entity.PenaltyEntity
 import com.golfrecorder.data.local.entity.ShotEntity
 import com.golfrecorder.data.repository.CourseRepository
+import com.golfrecorder.data.repository.PenaltyRepository
 import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.data.repository.ShotRepository
+import com.golfrecorder.domain.model.PenaltyType
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.location.LocationCapture
 import com.golfrecorder.ui.common.StrokeStepper
 import com.golfrecorder.ui.map.CourseMapSlot
 import com.golfrecorder.ui.map.MapSlotState
+import com.golfrecorder.ui.map.PenaltyPoint
 import com.golfrecorder.ui.map.ShotPoint
 import com.golfrecorder.util.haversineMeters
 import com.golfrecorder.util.isOnline
@@ -61,6 +67,7 @@ class RoundPlayViewModel(
     private val roundRepository: RoundRepository,
     private val courseRepository: CourseRepository,
     private val shotRepository: ShotRepository,
+    private val penaltyRepository: PenaltyRepository,
     private val roundId: Long,
     courseId: Long,
     initialHoleNumber: Int,
@@ -78,6 +85,10 @@ class RoundPlayViewModel(
     val shots: StateFlow<List<ShotEntity>> = shotsFlow
     private var shotsCollectJob: Job? = null
 
+    private val penaltiesFlow = MutableStateFlow<List<PenaltyEntity>>(emptyList())
+    val penalties: StateFlow<List<PenaltyEntity>> = penaltiesFlow
+    private var penaltiesCollectJob: Job? = null
+
     init {
         loadHole(initialHoleNumber)
     }
@@ -87,6 +98,10 @@ class RoundPlayViewModel(
         shotsCollectJob?.cancel()
         shotsCollectJob = viewModelScope.launch {
             shotRepository.getShots(roundId, holeNumber).collect { shotsFlow.value = it }
+        }
+        penaltiesCollectJob?.cancel()
+        penaltiesCollectJob = viewModelScope.launch {
+            penaltyRepository.getPenalties(roundId, holeNumber).collect { penaltiesFlow.value = it }
         }
         viewModelScope.launch {
             val existing = roundRepository.getRoundWithHoleRecords(roundId).first()
@@ -121,6 +136,39 @@ class RoundPlayViewModel(
         shotRepository.removeShot(roundId, currentHoleNumber, phase, shotIndex)
     }
 
+    /**
+     * OB/해저드는 규칙상 벌타일 뿐 실제 위치를 갖는 '샷'이 아니라서 shots 테이블에는
+     * 안 들어간다. 다만 해당 타수 구간(그린까지/숏게임)의 타수는 그대로 +1 되어야 한다.
+     * GPS를 못 잡아도(lat/lng == null) 타수는 일반 샷과 동일하게 우선 올리고, 지도에
+     * 표시할 위치만 있을 때 추가로 저장한다 — 벌타를 놓치는 것이 위치를 못 찍는 것보다
+     * 훨씬 치명적인 실수라서다.
+     */
+    fun addPenalty(phase: ShotPhase, type: PenaltyType, lat: Double?, lng: Double?) {
+        val newValue = when (phase) {
+            ShotPhase.TO_GREEN -> ++strokesToGreen
+            ShotPhase.SHORT_GAME -> ++strokesGreenToHoleOut
+        }
+        if (lat != null && lng != null) {
+            viewModelScope.launch {
+                penaltyRepository.addPenalty(roundId, currentHoleNumber, phase, type, newValue, lat, lng)
+            }
+        }
+    }
+
+    fun removePenalty(phase: ShotPhase, type: PenaltyType) {
+        val oldValue = when (phase) {
+            ShotPhase.TO_GREEN -> strokesToGreen
+            ShotPhase.SHORT_GAME -> strokesGreenToHoleOut
+        }
+        when (phase) {
+            ShotPhase.TO_GREEN -> strokesToGreen--
+            ShotPhase.SHORT_GAME -> strokesGreenToHoleOut--
+        }
+        viewModelScope.launch {
+            penaltyRepository.removePenalty(roundId, currentHoleNumber, phase, type, oldValue)
+        }
+    }
+
     fun setGreenLocation(lat: Double, lng: Double) {
         val holeId = holes.value.find { it.holeNumber == currentHoleNumber }?.id ?: return
         viewModelScope.launch {
@@ -140,6 +188,7 @@ class RoundPlayViewModelFactory(
     private val roundRepository: RoundRepository,
     private val courseRepository: CourseRepository,
     private val shotRepository: ShotRepository,
+    private val penaltyRepository: PenaltyRepository,
     private val roundId: Long,
     private val courseId: Long,
     private val initialHoleNumber: Int,
@@ -150,6 +199,7 @@ class RoundPlayViewModelFactory(
             roundRepository,
             courseRepository,
             shotRepository,
+            penaltyRepository,
             roundId,
             courseId,
             initialHoleNumber,
@@ -170,6 +220,7 @@ fun RoundPlayScreen(
 
     val holes by viewModel.holes.collectAsStateWithLifecycle()
     val shots by viewModel.shots.collectAsStateWithLifecycle()
+    val penalties by viewModel.penalties.collectAsStateWithLifecycle()
     val holeCount = holes.size
     val currentHole = holes.find { it.holeNumber == viewModel.currentHoleNumber }
     val par = currentHole?.par ?: 4
@@ -211,6 +262,19 @@ fun RoundPlayScreen(
         }
     }
 
+    fun onPenaltyChange(phase: ShotPhase, type: PenaltyType, oldValue: Int, newValue: Int) {
+        if (newValue > oldValue) {
+            scope.launch {
+                shotMutex.withLock {
+                    val loc = if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
+                    viewModel.addPenalty(phase, type, loc?.lat, loc?.lng)
+                }
+            }
+        } else if (newValue < oldValue) {
+            viewModel.removePenalty(phase, type)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -219,7 +283,12 @@ fun RoundPlayScreen(
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             val fixedLocation = currentLocation
             if (greenLocation == null) {
                 if (online) {
@@ -252,6 +321,7 @@ fun RoundPlayScreen(
                     greenLocation = greenLocation,
                     currentLocation = fixedLocation,
                     shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
+                    penalties = penalties.map { PenaltyPoint(PenaltyType.valueOf(it.type), it.lat, it.lng) },
                     tapToSetGreen = greenLocation == null,
                     onGreenTap = { tapped -> viewModel.setGreenLocation(tapped.lat, tapped.lng) },
                 )
@@ -267,6 +337,14 @@ fun RoundPlayScreen(
                 greenLocation == null -> Text("그린 위치 미설정 (온라인에서 설정 필요)")
                 else -> Text("오프라인 상태입니다.")
             }
+            // OB/해저드는 그린까지 가는 구간에서만 일어난다고 보고 숏게임에는 두지 않는다.
+            val obToGreenCount = penalties.count {
+                it.phase == ShotPhase.TO_GREEN.name && it.type == PenaltyType.OB.name
+            }
+            val hazardToGreenCount = penalties.count {
+                it.phase == ShotPhase.TO_GREEN.name && it.type == PenaltyType.HAZARD.name
+            }
+
             Spacer(Modifier.height(16.dp))
             StrokeStepper(
                 label = "그린까지 타수",
@@ -274,6 +352,22 @@ fun RoundPlayScreen(
                 onValueChange = { newValue ->
                     val old = viewModel.strokesToGreen
                     onStepperChange(ShotPhase.TO_GREEN, old, newValue) { viewModel.strokesToGreen = it }
+                },
+            )
+            Spacer(Modifier.height(4.dp))
+            StrokeStepper(
+                label = "OB",
+                value = obToGreenCount,
+                onValueChange = { newValue ->
+                    onPenaltyChange(ShotPhase.TO_GREEN, PenaltyType.OB, obToGreenCount, newValue)
+                },
+            )
+            Spacer(Modifier.height(4.dp))
+            StrokeStepper(
+                label = "해저드",
+                value = hazardToGreenCount,
+                onValueChange = { newValue ->
+                    onPenaltyChange(ShotPhase.TO_GREEN, PenaltyType.HAZARD, hazardToGreenCount, newValue)
                 },
             )
             Spacer(Modifier.height(16.dp))

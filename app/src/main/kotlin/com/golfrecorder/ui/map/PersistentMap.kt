@@ -53,6 +53,7 @@ internal class MapRequest(
     val greenLocation: AppLatLng?,
     val currentLocation: AppLatLng?,
     val shots: List<ShotPoint>,
+    val penalties: List<PenaltyPoint>,
     val tapToSetGreen: Boolean,
     val onGreenTap: (AppLatLng) -> Unit,
 )
@@ -96,6 +97,7 @@ fun CourseMapSlot(
     greenLocation: AppLatLng?,
     currentLocation: AppLatLng?,
     shots: List<ShotPoint>,
+    penalties: List<PenaltyPoint>,
     tapToSetGreen: Boolean,
     onGreenTap: (AppLatLng) -> Unit,
     modifier: Modifier = Modifier,
@@ -127,6 +129,7 @@ fun CourseMapSlot(
         greenLocation,
         currentLocation,
         shots,
+        penalties,
         tapToSetGreen,
     ) {
         if (currentOffset != null && size.width > 0 && size.height > 0) {
@@ -138,6 +141,7 @@ fun CourseMapSlot(
                     greenLocation = greenLocation,
                     currentLocation = currentLocation,
                     shots = shots,
+                    penalties = penalties,
                     tapToSetGreen = tapToSetGreen,
                     onGreenTap = stableOnGreenTap,
                 )
@@ -229,14 +233,14 @@ fun PersistentCourseMap(state: MapSlotState) {
         }
     }
 
-    LaunchedEffect(kakaoMapState.value, request?.greenLocation, request?.shots) {
+    LaunchedEffect(kakaoMapState.value, request?.greenLocation, request?.shots, request?.penalties) {
         val map = kakaoMapState.value ?: return@LaunchedEffect
         // 화면이 지도를 놓아준 상태(request == null)에서는 아무것도 지우지 않는다.
         // 여기서 지우면 화면 전환 도중 "마지막 동작이 전부 삭제"로 끝나버려서
         // 다시 들어왔을 때 선/마커가 사라진 것처럼 보인다. 어차피 지도는 화면 밖에
         // 있고, 다음에 그릴 때 removeAll부터 하므로 남은 데이터는 문제되지 않는다.
         val active = request ?: return@LaunchedEffect
-        drawOverlays(map, active.greenLocation, active.shots)
+        drawOverlays(map, active.greenLocation, active.shots, active.penalties)
     }
 
     DisposableEffect(lifecycleOwner) {
