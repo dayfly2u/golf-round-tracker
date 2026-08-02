@@ -18,6 +18,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.golfrecorder.R
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.location.LatLng as AppLatLng
+import com.golfrecorder.util.bearingDegrees
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.LatLng
@@ -33,6 +34,13 @@ import com.kakao.vectormap.shape.PolylineOptions
 import com.kakao.vectormap.shape.PolylineStyle
 
 data class ShotPoint(val phase: ShotPhase, val lat: Double, val lng: Double)
+
+// ic_dot_red.png / ic_dot_blue.png와 동일한 색상 (선 색을 원 색상과 맞추기 위함).
+private const val SHOT_RED = "#E53935"
+private const val SHOT_BLUE = "#1E88E5"
+
+// 홀 하나(그린 주변 샷 경로) 스케일에 맞는 고정 줌 레벨. 매번 다른 줌으로 뜨는 것을 방지.
+private const val MAP_ZOOM_LEVEL = 17
 
 @Composable
 fun CourseMapView(
@@ -79,7 +87,9 @@ fun CourseMapView(
         val map = kakaoMapState.value ?: return@LaunchedEffect
         val center = greenLocation ?: currentLocation
         if (center != null) {
-            map.moveCamera(CameraUpdateFactory.newCenterPosition(LatLng.from(center.lat, center.lng)))
+            map.moveCamera(
+                CameraUpdateFactory.newCenterPosition(LatLng.from(center.lat, center.lng), MAP_ZOOM_LEVEL)
+            )
         }
         drawOverlays(map, greenLocation, shots)
     }
@@ -124,8 +134,28 @@ private fun drawOverlays(map: KakaoMap, greenLocation: AppLatLng?, shots: List<S
     val shapeLayer = map.shapeManager?.layer
     shapeLayer?.removeAll()
     if (shots.size >= 2) {
-        val coordinates = shots.map { LatLng.from(it.lat, it.lng) }
-        val style = PolylineStyle.from(6f, Color.YELLOW)
-        shapeLayer?.addPolyline(PolylineOptions.from(MapPoints.fromLatLng(coordinates), style))
+        val toGreenLineStyle = PolylineStyle.from(6f, Color.parseColor(SHOT_RED))
+        val shortGameLineStyle = PolylineStyle.from(6f, Color.parseColor(SHOT_BLUE))
+        val arrowStyles = map.labelManager?.addLabelStyles(
+            LabelStyles.from("shot-arrow", LabelStyle.from(R.drawable.ic_arrow))
+        )
+        for (i in 0 until shots.size - 1) {
+            val from = shots[i]
+            val to = shots[i + 1]
+            // 선 색은 출발점(이전 샷)의 원 색상과 동일하게 맞춘다.
+            val segmentStyle = if (from.phase == ShotPhase.TO_GREEN) toGreenLineStyle else shortGameLineStyle
+            val segmentPoints = MapPoints.fromLatLng(
+                listOf(LatLng.from(from.lat, from.lng), LatLng.from(to.lat, to.lng))
+            )
+            shapeLayer?.addPolyline(PolylineOptions.from(segmentPoints, segmentStyle))
+
+            val midLat = (from.lat + to.lat) / 2
+            val midLng = (from.lng + to.lng) / 2
+            val bearing = bearingDegrees(from.lat, from.lng, to.lat, to.lng)
+            val arrowLabel = labelLayer.addLabel(
+                LabelOptions.from(LatLng.from(midLat, midLng)).setStyles(arrowStyles)
+            )
+            arrowLabel?.rotateTo(Math.toRadians(bearing).toFloat())
+        }
     }
 }

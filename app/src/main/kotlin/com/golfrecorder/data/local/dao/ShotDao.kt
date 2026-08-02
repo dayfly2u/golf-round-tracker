@@ -20,7 +20,8 @@ interface ShotDao {
     suspend fun deleteShot(roundId: Long, holeNumber: Int, phase: String, shotIndex: Int)
 
     @Query(
-        "SELECT * FROM shots WHERE roundId = :roundId AND holeNumber = :holeNumber ORDER BY phase, shotIndex"
+        "SELECT * FROM shots WHERE roundId = :roundId AND holeNumber = :holeNumber " +
+            "ORDER BY CASE phase WHEN 'TO_GREEN' THEN 0 ELSE 1 END, shotIndex"
     )
     fun getShots(roundId: Long, holeNumber: Int): Flow<List<ShotEntity>>
 }
