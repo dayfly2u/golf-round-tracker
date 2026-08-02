@@ -24,7 +24,7 @@ import com.golfrecorder.data.local.entity.ShotEntity
         ShotEntity::class,
         PenaltyEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

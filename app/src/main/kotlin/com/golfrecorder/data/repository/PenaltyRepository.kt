@@ -17,6 +17,7 @@ class PenaltyRepository(private val penaltyDao: PenaltyDao) {
         phase: ShotPhase,
         type: PenaltyType,
         penaltyIndex: Int,
+        strokeCount: Int,
         lat: Double,
         lng: Double,
     ) = penaltyDao.upsertPenalty(
@@ -26,6 +27,7 @@ class PenaltyRepository(private val penaltyDao: PenaltyDao) {
             phase = phase.name,
             type = type.name,
             penaltyIndex = penaltyIndex,
+            strokeCount = strokeCount,
             lat = lat,
             lng = lng,
             capturedAt = System.currentTimeMillis(),

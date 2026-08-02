@@ -47,6 +47,7 @@ import com.golfrecorder.domain.model.PenaltyType
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.location.LocationCapture
+import com.golfrecorder.ui.common.PenaltyStepper
 import com.golfrecorder.ui.common.StrokeStepper
 import com.golfrecorder.ui.map.CourseMapSlot
 import com.golfrecorder.ui.map.MapSlotState
@@ -144,34 +145,40 @@ class RoundPlayViewModel(
 
     /**
      * OB/해저드는 규칙상 벌타일 뿐 실제 위치를 갖는 '샷'이 아니라서 shots 테이블에는
-     * 안 들어간다. 다만 해당 타수 구간(그린까지/숏게임)의 타수는 그대로 +1 되어야 한다.
+     * 안 들어간다. 다만 해당 타수 구간(그린까지/숏게임)의 타수는 그대로 늘어야 한다.
+     * OB는 제자리 재티(+1)와 특설티 이동(+2)이 둘 다 있어서 [strokeCount]로 몇 타가
+     * 늘어나는지 받는다 — 다만 "OB 몇 번 났는지"는 항상 1건으로 센다(벌타 크기와
+     * 무관하게 penalties 테이블에는 한 행만 추가).
      * GPS를 못 잡아도(lat/lng == null) 타수는 일반 샷과 동일하게 우선 올리고, 지도에
      * 표시할 위치만 있을 때 추가로 저장한다 — 벌타를 놓치는 것이 위치를 못 찍는 것보다
      * 훨씬 치명적인 실수라서다.
      */
-    fun addPenalty(phase: ShotPhase, type: PenaltyType, lat: Double?, lng: Double?) {
+    fun addPenalty(phase: ShotPhase, type: PenaltyType, strokeCount: Int, lat: Double?, lng: Double?) {
         val newValue = when (phase) {
-            ShotPhase.TO_GREEN -> ++strokesToGreen
-            ShotPhase.SHORT_GAME -> ++strokesGreenToHoleOut
+            ShotPhase.TO_GREEN -> { strokesToGreen += strokeCount; strokesToGreen }
+            ShotPhase.SHORT_GAME -> { strokesGreenToHoleOut += strokeCount; strokesGreenToHoleOut }
         }
         if (lat != null && lng != null) {
             viewModelScope.launch {
-                penaltyRepository.addPenalty(roundId, currentHoleNumber, phase, type, newValue, lat, lng)
+                penaltyRepository.addPenalty(
+                    roundId, currentHoleNumber, phase, type, newValue, strokeCount, lat, lng
+                )
             }
         }
     }
 
-    fun removePenalty(phase: ShotPhase, type: PenaltyType) {
-        val oldValue = when (phase) {
-            ShotPhase.TO_GREEN -> strokesToGreen
-            ShotPhase.SHORT_GAME -> strokesGreenToHoleOut
-        }
+    /** 가장 최근에 추가한 이 종류의 벌타 1건을 되돌린다 — 그 건이 실제로 더한 타수만큼 뺀다. */
+    fun removeLastPenalty(phase: ShotPhase, type: PenaltyType) {
+        val last = penaltiesFlow.value
+            .filter { it.phase == phase.name && it.type == type.name }
+            .maxByOrNull { it.penaltyIndex }
+            ?: return
         when (phase) {
-            ShotPhase.TO_GREEN -> strokesToGreen--
-            ShotPhase.SHORT_GAME -> strokesGreenToHoleOut--
+            ShotPhase.TO_GREEN -> strokesToGreen -= last.strokeCount
+            ShotPhase.SHORT_GAME -> strokesGreenToHoleOut -= last.strokeCount
         }
         viewModelScope.launch {
-            penaltyRepository.removePenalty(roundId, currentHoleNumber, phase, type, oldValue)
+            penaltyRepository.removePenalty(roundId, currentHoleNumber, phase, type, last.penaltyIndex)
         }
     }
 
@@ -268,17 +275,17 @@ fun RoundPlayScreen(
         }
     }
 
-    fun onPenaltyChange(phase: ShotPhase, type: PenaltyType, oldValue: Int, newValue: Int) {
-        if (newValue > oldValue) {
-            scope.launch {
-                shotMutex.withLock {
-                    val loc = if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
-                    viewModel.addPenalty(phase, type, loc?.lat, loc?.lng)
-                }
+    fun onAddPenalty(phase: ShotPhase, type: PenaltyType, strokeCount: Int) {
+        scope.launch {
+            shotMutex.withLock {
+                val loc = if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
+                viewModel.addPenalty(phase, type, strokeCount, loc?.lat, loc?.lng)
             }
-        } else if (newValue < oldValue) {
-            viewModel.removePenalty(phase, type)
         }
+    }
+
+    fun onRemovePenalty(phase: ShotPhase, type: PenaltyType) {
+        viewModel.removeLastPenalty(phase, type)
     }
 
     Scaffold(
@@ -362,14 +369,14 @@ fun RoundPlayScreen(
             )
             Spacer(Modifier.height(4.dp))
             Row {
-                StrokeStepper(
+                PenaltyStepper(
                     label = "OB",
                     value = obToGreenCount,
                     buttonColor = PENALTY_OB_COLOR,
-                    compact = true,
-                    onValueChange = { newValue ->
-                        onPenaltyChange(ShotPhase.TO_GREEN, PenaltyType.OB, obToGreenCount, newValue)
-                    },
+                    addAmounts = listOf(1, 2),
+                    canRemove = obToGreenCount > 0,
+                    onAdd = { strokeCount -> onAddPenalty(ShotPhase.TO_GREEN, PenaltyType.OB, strokeCount) },
+                    onRemove = { onRemovePenalty(ShotPhase.TO_GREEN, PenaltyType.OB) },
                 )
                 Spacer(Modifier.width(20.dp))
                 StrokeStepper(
@@ -378,7 +385,11 @@ fun RoundPlayScreen(
                     buttonColor = PENALTY_HAZARD_COLOR,
                     compact = true,
                     onValueChange = { newValue ->
-                        onPenaltyChange(ShotPhase.TO_GREEN, PenaltyType.HAZARD, hazardToGreenCount, newValue)
+                        if (newValue > hazardToGreenCount) {
+                            onAddPenalty(ShotPhase.TO_GREEN, PenaltyType.HAZARD, 1)
+                        } else {
+                            onRemovePenalty(ShotPhase.TO_GREEN, PenaltyType.HAZARD)
+                        }
                     },
                 )
             }

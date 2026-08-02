@@ -76,3 +76,55 @@ fun StrokeStepper(
         ) { Text("+", style = buttonTextStyle) }
     }
 }
+
+/**
+ * OB처럼 "몇 건 났는지"와 "그 건이 몇 타를 먹였는지"가 분리되는 벌타용 카운터.
+ * [addAmounts]에 준 만큼 +N 버튼이 늘어난다(예: [1, 2] → "+1"/"+2" 두 개).
+ * [value]는 항상 "건수"이고, 실제로 몇 타가 늘었는지는 호출자가 [onAdd]에서 처리한다.
+ */
+@Composable
+fun PenaltyStepper(
+    label: String,
+    value: Int,
+    onAdd: (amount: Int) -> Unit,
+    onRemove: () -> Unit,
+    canRemove: Boolean,
+    buttonColor: Color,
+    addAmounts: List<Int> = listOf(1),
+    modifier: Modifier = Modifier,
+) {
+    val buttonPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+    val buttonHeight = 28.dp
+    val buttonTextStyle = MaterialTheme.typography.labelSmall
+    val buttonColors = ButtonDefaults.buttonColors(containerColor = buttonColor)
+
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            modifier = Modifier.padding(end = 4.dp),
+        )
+        Button(
+            onClick = onRemove,
+            enabled = canRemove,
+            colors = buttonColors,
+            contentPadding = buttonPadding,
+            modifier = Modifier.height(buttonHeight),
+        ) { Text("−", style = buttonTextStyle) }
+        Text(
+            "$value",
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(20.dp),
+        )
+        addAmounts.forEach { amount ->
+            Button(
+                onClick = { onAdd(amount) },
+                colors = buttonColors,
+                contentPadding = buttonPadding,
+                modifier = Modifier.height(buttonHeight).padding(start = 2.dp),
+            ) { Text("+$amount", style = buttonTextStyle) }
+        }
+    }
+}
