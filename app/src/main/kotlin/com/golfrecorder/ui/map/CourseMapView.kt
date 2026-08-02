@@ -18,7 +18,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.golfrecorder.R
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.location.LatLng as AppLatLng
-import com.golfrecorder.util.bearingDegrees
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.LatLng
@@ -32,6 +31,8 @@ import com.kakao.vectormap.label.LabelStyles
 import com.kakao.vectormap.shape.MapPoints
 import com.kakao.vectormap.shape.PolylineOptions
 import com.kakao.vectormap.shape.PolylineStyle
+import com.kakao.vectormap.shape.ShapeLayerOptions
+import com.kakao.vectormap.shape.ShapeLayerPass
 
 data class ShotPoint(val phase: ShotPhase, val lat: Double, val lng: Double)
 
@@ -39,8 +40,9 @@ data class ShotPoint(val phase: ShotPhase, val lat: Double, val lng: Double)
 private const val SHOT_RED = "#E53935"
 private const val SHOT_BLUE = "#1E88E5"
 
-// 홀 하나(그린 주변 샷 경로) 스케일에 맞는 고정 줌 레벨. 매번 다른 줌으로 뜨는 것을 방지.
-private const val MAP_ZOOM_LEVEL = 17
+// 골프 한 홀(티~그린) 정도가 화면에 들어오는 정도로 시작 — 값이 높을수록 확대됨.
+private const val MAP_ZOOM_LEVEL = 16
+
 
 @Composable
 fun CourseMapView(
@@ -70,9 +72,15 @@ fun CourseMapView(
                     object : KakaoMapReadyCallback() {
                         override fun onMapReady(map: KakaoMap) {
                             map.changeMapType(MapType.SKYVIEW)
-                            map.setOnMapClickListener { _, position, _, _ ->
+                            map.setOnMapClickListener { clickedMap, position, screenPoint, _ ->
                                 if (tapToSetGreenState.value) {
-                                    onGreenTapState.value(AppLatLng(position.latitude, position.longitude))
+                                    // position은 팬(pan) 이후 최신 카메라 상태를 반영하지 못하는
+                                    // 경우가 있어, 실제 스크린 픽셀 좌표(screenPoint)로 직접
+                                    // 재변환한 좌표를 우선 사용한다.
+                                    val resolved =
+                                        clickedMap.fromScreenPoint(screenPoint.x.toInt(), screenPoint.y.toInt())
+                                            ?: position
+                                    onGreenTapState.value(AppLatLng(resolved.latitude, resolved.longitude))
                                 }
                             }
                             kakaoMapState.value = map
@@ -87,6 +95,7 @@ fun CourseMapView(
         val map = kakaoMapState.value ?: return@LaunchedEffect
         val center = greenLocation ?: currentLocation
         if (center != null) {
+            // Kakao Vector Map(Android SDK)은 숫자가 높을수록 확대(Web API와 반대 방향).
             map.moveCamera(
                 CameraUpdateFactory.newCenterPosition(LatLng.from(center.lat, center.lng), MAP_ZOOM_LEVEL)
             )
@@ -109,36 +118,17 @@ fun CourseMapView(
 
 private fun drawOverlays(map: KakaoMap, greenLocation: AppLatLng?, shots: List<ShotPoint>) {
     val labelLayer = map.labelManager?.layer ?: return
-    labelLayer.removeAll()
 
-    if (greenLocation != null) {
-        val greenStyles = map.labelManager?.addLabelStyles(
-            LabelStyles.from("green-pin", LabelStyle.from(R.drawable.ic_green_pin))
-        )
-        labelLayer.addLabel(
-            LabelOptions.from(LatLng.from(greenLocation.lat, greenLocation.lng)).setStyles(greenStyles)
-        )
-    }
-
-    val toGreenStyles = map.labelManager?.addLabelStyles(
-        LabelStyles.from("shot-to-green", LabelStyle.from(R.drawable.ic_dot_red))
+    // 기본 shape 레이어(ShapeLayerPass.Default)는 "지도와 배경 사이"에 그려져서
+    // 위성 타일 밑에 깔려 안 보인다 — Overlay 패스로 명시적인 레이어를 만들어야
+    // 실제로 화면에 보인다.
+    val shapeLayer = map.shapeManager?.addLayer(
+        ShapeLayerOptions.from("shot-lines", 10001, ShapeLayerPass.Overlay)
     )
-    val shortGameStyles = map.labelManager?.addLabelStyles(
-        LabelStyles.from("shot-short-game", LabelStyle.from(R.drawable.ic_dot_blue))
-    )
-    shots.forEach { shot ->
-        val styles = if (shot.phase == ShotPhase.TO_GREEN) toGreenStyles else shortGameStyles
-        labelLayer.addLabel(LabelOptions.from(LatLng.from(shot.lat, shot.lng)).setStyles(styles))
-    }
-
-    val shapeLayer = map.shapeManager?.layer
     shapeLayer?.removeAll()
     if (shots.size >= 2) {
-        val toGreenLineStyle = PolylineStyle.from(6f, Color.parseColor(SHOT_RED))
-        val shortGameLineStyle = PolylineStyle.from(6f, Color.parseColor(SHOT_BLUE))
-        val arrowStyles = map.labelManager?.addLabelStyles(
-            LabelStyles.from("shot-arrow", LabelStyle.from(R.drawable.ic_arrow))
-        )
+        val toGreenLineStyle = PolylineStyle.from(12f, Color.parseColor(SHOT_RED))
+        val shortGameLineStyle = PolylineStyle.from(12f, Color.parseColor(SHOT_BLUE))
         for (i in 0 until shots.size - 1) {
             val from = shots[i]
             val to = shots[i + 1]
@@ -148,14 +138,31 @@ private fun drawOverlays(map: KakaoMap, greenLocation: AppLatLng?, shots: List<S
                 listOf(LatLng.from(from.lat, from.lng), LatLng.from(to.lat, to.lng))
             )
             shapeLayer?.addPolyline(PolylineOptions.from(segmentPoints, segmentStyle))
-
-            val midLat = (from.lat + to.lat) / 2
-            val midLng = (from.lng + to.lng) / 2
-            val bearing = bearingDegrees(from.lat, from.lng, to.lat, to.lng)
-            val arrowLabel = labelLayer.addLabel(
-                LabelOptions.from(LatLng.from(midLat, midLng)).setStyles(arrowStyles)
-            )
-            arrowLabel?.rotateTo(Math.toRadians(bearing).toFloat())
         }
+    }
+
+    labelLayer.removeAll()
+
+    if (greenLocation != null) {
+        // 아이콘이 핀이 아니라 원형이라 실제 좌표는 원의 중심이어야 한다.
+        // 기본 anchor(0.5, 1.0=하단 중심)를 쓰면 좌표가 원 아래쪽 끝에 고정되어
+        // 탭한 위치보다 위로 떠 보인다.
+        val greenStyles = map.labelManager?.addLabelStyles(
+            LabelStyles.from("green-pin", LabelStyle.from(R.drawable.ic_green_pin).setAnchorPoint(0.5f, 0.5f))
+        )
+        labelLayer.addLabel(
+            LabelOptions.from(LatLng.from(greenLocation.lat, greenLocation.lng)).setStyles(greenStyles)
+        )
+    }
+
+    val toGreenStyles = map.labelManager?.addLabelStyles(
+        LabelStyles.from("shot-to-green", LabelStyle.from(R.drawable.ic_dot_red).setAnchorPoint(0.5f, 0.5f))
+    )
+    val shortGameStyles = map.labelManager?.addLabelStyles(
+        LabelStyles.from("shot-short-game", LabelStyle.from(R.drawable.ic_dot_blue).setAnchorPoint(0.5f, 0.5f))
+    )
+    shots.forEach { shot ->
+        val styles = if (shot.phase == ShotPhase.TO_GREEN) toGreenStyles else shortGameStyles
+        labelLayer.addLabel(LabelOptions.from(LatLng.from(shot.lat, shot.lng)).setStyles(styles))
     }
 }
