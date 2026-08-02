@@ -1,30 +1,11 @@
 package com.golfrecorder.ui.map
 
 import android.graphics.Color
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.golfrecorder.R
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.kakao.vectormap.KakaoMap
-import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.LatLng
-import com.kakao.vectormap.MapLifeCycleCallback
-import com.kakao.vectormap.MapType
-import com.kakao.vectormap.MapView
-import com.kakao.vectormap.camera.CameraUpdateFactory
 import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
@@ -41,94 +22,26 @@ private const val SHOT_RED = "#E53935"
 private const val SHOT_BLUE = "#1E88E5"
 
 // 골프 한 홀(티~그린) 정도가 화면에 들어오는 정도로 시작 — 값이 높을수록 확대됨.
-private const val MAP_ZOOM_LEVEL = 16
+internal const val MAP_ZOOM_LEVEL = 16
 
+private const val SHOT_LINE_LAYER_ID = "shot-lines"
 
-@Composable
-fun CourseMapView(
-    greenLocation: AppLatLng?,
-    currentLocation: AppLatLng?,
-    shots: List<ShotPoint>,
-    tapToSetGreen: Boolean,
-    onGreenTap: (AppLatLng) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val mapViewState = remember { mutableStateOf<MapView?>(null) }
-    val kakaoMapState = remember { mutableStateOf<KakaoMap?>(null) }
-    val tapToSetGreenState = rememberUpdatedState(tapToSetGreen)
-    val onGreenTapState = rememberUpdatedState(onGreenTap)
-
-    AndroidView(
-        modifier = modifier.fillMaxWidth().height(380.dp),
-        factory = { context ->
-            MapView(context).also { mapView ->
-                mapViewState.value = mapView
-                mapView.start(
-                    object : MapLifeCycleCallback() {
-                        override fun onMapDestroy() {}
-                        override fun onMapError(error: Exception) {}
-                    },
-                    object : KakaoMapReadyCallback() {
-                        override fun onMapReady(map: KakaoMap) {
-                            map.changeMapType(MapType.SKYVIEW)
-                            map.setOnMapClickListener { clickedMap, position, screenPoint, _ ->
-                                if (tapToSetGreenState.value) {
-                                    // position은 팬(pan) 이후 최신 카메라 상태를 반영하지 못하는
-                                    // 경우가 있어, 실제 스크린 픽셀 좌표(screenPoint)로 직접
-                                    // 재변환한 좌표를 우선 사용한다.
-                                    val resolved =
-                                        clickedMap.fromScreenPoint(screenPoint.x.toInt(), screenPoint.y.toInt())
-                                            ?: position
-                                    onGreenTapState.value(AppLatLng(resolved.latitude, resolved.longitude))
-                                }
-                            }
-                            kakaoMapState.value = map
-                        }
-                    },
-                )
-            }
-        },
-    )
-
-    LaunchedEffect(kakaoMapState.value, greenLocation, currentLocation, shots) {
-        val map = kakaoMapState.value ?: return@LaunchedEffect
-        val center = greenLocation ?: currentLocation
-        if (center != null) {
-            // Kakao Vector Map(Android SDK)은 숫자가 높을수록 확대(Web API와 반대 방향).
-            map.moveCamera(
-                CameraUpdateFactory.newCenterPosition(LatLng.from(center.lat, center.lng), MAP_ZOOM_LEVEL)
-            )
-        }
-        drawOverlays(map, greenLocation, shots)
-    }
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> mapViewState.value?.resume()
-                Lifecycle.Event.ON_PAUSE -> mapViewState.value?.pause()
-                else -> {}
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-}
-
-private fun drawOverlays(map: KakaoMap, greenLocation: AppLatLng?, shots: List<ShotPoint>) {
+internal fun drawOverlays(map: KakaoMap, greenLocation: AppLatLng?, shots: List<ShotPoint>) {
     val labelLayer = map.labelManager?.layer ?: return
 
     // 기본 shape 레이어(ShapeLayerPass.Default)는 "지도와 배경 사이"에 그려져서
     // 위성 타일 밑에 깔려 안 보인다 — Overlay 패스로 명시적인 레이어를 만들어야
-    // 실제로 화면에 보인다.
-    val shapeLayer = map.shapeManager?.addLayer(
-        ShapeLayerOptions.from("shot-lines", 10001, ShapeLayerPass.Overlay)
-    )
+    // 실제로 화면에 보인다. 지도는 앱 내내 재사용되므로 이미 만들어 둔 레이어가
+    // 있으면 그대로 쓴다.
+    val shapeManager = map.shapeManager
+    val shapeLayer = shapeManager?.getLayer(SHOT_LINE_LAYER_ID)
+        ?: shapeManager?.addLayer(
+            ShapeLayerOptions.from(SHOT_LINE_LAYER_ID, 10001, ShapeLayerPass.Overlay)
+        )
     shapeLayer?.removeAll()
     if (shots.size >= 2) {
-        val toGreenLineStyle = PolylineStyle.from(12f, Color.parseColor(SHOT_RED))
-        val shortGameLineStyle = PolylineStyle.from(12f, Color.parseColor(SHOT_BLUE))
+        val toGreenLineStyle = PolylineStyle.from(5f, Color.parseColor(SHOT_RED))
+        val shortGameLineStyle = PolylineStyle.from(5f, Color.parseColor(SHOT_BLUE))
         for (i in 0 until shots.size - 1) {
             val from = shots[i]
             val to = shots[i + 1]

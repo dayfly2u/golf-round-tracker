@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -22,6 +23,8 @@ import com.golfrecorder.ui.course.CourseSelectViewModelFactory
 import com.golfrecorder.ui.history.RoundHistoryScreen
 import com.golfrecorder.ui.history.RoundHistoryViewModel
 import com.golfrecorder.ui.history.RoundHistoryViewModelFactory
+import com.golfrecorder.ui.map.MapSlotState
+import com.golfrecorder.ui.map.PersistentCourseMap
 import com.golfrecorder.ui.navigation.Screen
 import com.golfrecorder.ui.round.RoundPlayScreen
 import com.golfrecorder.ui.round.RoundPlayViewModel
@@ -38,7 +41,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    AppRoot(container)
+                    // 지도(MapView)는 화면마다 새로 만들지 않고 여기서 딱 하나만 만들어
+                    // 앱이 살아있는 내내 유지한다. 화면 전환 시에는 위치만 옮긴다.
+                    // (SDK가 MapView 생성/파괴 반복을 견디지 못해 지도가 안 뜨는 문제 때문)
+                    val mapSlotState = remember { MapSlotState() }
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AppRoot(container, mapSlotState)
+                        PersistentCourseMap(mapSlotState)
+                    }
                 }
             }
         }
@@ -46,7 +56,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppRoot(container: AppContainer) {
+private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
     val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
     val current = backStack.last()
 
@@ -114,6 +124,7 @@ private fun AppRoot(container: AppContainer) {
             )
             RoundPlayScreen(
                 viewModel = vm,
+                mapSlotState = mapSlotState,
                 onFinished = { push(Screen.RoundSummary(screen.roundId, screen.courseId)) },
                 onBack = { pop() },
             )

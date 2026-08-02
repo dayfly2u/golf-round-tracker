@@ -41,7 +41,8 @@ import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.location.LocationCapture
 import com.golfrecorder.ui.common.StrokeStepper
-import com.golfrecorder.ui.map.CourseMapView
+import com.golfrecorder.ui.map.CourseMapSlot
+import com.golfrecorder.ui.map.MapSlotState
 import com.golfrecorder.ui.map.ShotPoint
 import com.golfrecorder.util.haversineMeters
 import com.golfrecorder.util.isOnline
@@ -159,6 +160,7 @@ class RoundPlayViewModelFactory(
 @Composable
 fun RoundPlayScreen(
     viewModel: RoundPlayViewModel,
+    mapSlotState: MapSlotState,
     onFinished: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -244,7 +246,9 @@ fun RoundPlayScreen(
             }
             when {
                 !hasLocationPermission -> Text("위치 권한이 필요합니다.")
-                online -> CourseMapView(
+                online -> CourseMapSlot(
+                    state = mapSlotState,
+                    cameraKey = "hole-${viewModel.currentHoleNumber}",
                     greenLocation = greenLocation,
                     currentLocation = fixedLocation,
                     shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
