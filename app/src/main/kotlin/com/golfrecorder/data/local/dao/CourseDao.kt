@@ -37,6 +37,9 @@ interface CourseDao {
     @Query("UPDATE holes SET greenLat = :lat, greenLng = :lng WHERE id = :holeId")
     suspend fun updateGreenLocation(holeId: Long, lat: Double, lng: Double)
 
+    @Query("UPDATE holes SET greenLat = NULL, greenLng = NULL WHERE id = :holeId")
+    suspend fun clearGreenLocation(holeId: Long)
+
     @Query("SELECT * FROM courses ORDER BY name ASC")
     fun getCourses(): Flow<List<CourseEntity>>
 

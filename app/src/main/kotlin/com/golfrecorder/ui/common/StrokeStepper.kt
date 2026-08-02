@@ -17,7 +17,7 @@ fun StrokeStepper(
     label: String,
     value: Int,
     onValueChange: (Int) -> Unit,
-    minValue: Int = 1,
+    minValue: Int = 0,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.width(140.dp))

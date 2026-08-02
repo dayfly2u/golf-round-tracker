@@ -50,7 +50,7 @@ fun CourseMapView(
     val onGreenTapState = rememberUpdatedState(onGreenTap)
 
     AndroidView(
-        modifier = modifier.fillMaxWidth().height(220.dp),
+        modifier = modifier.fillMaxWidth().height(380.dp),
         factory = { context ->
             MapView(context).also { mapView ->
                 mapViewState.value = mapView

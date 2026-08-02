@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -68,8 +70,8 @@ class RoundPlayViewModel(
 
     var currentHoleNumber by mutableStateOf(initialHoleNumber)
         private set
-    var strokesToGreen by mutableStateOf(1)
-    var strokesGreenToHoleOut by mutableStateOf(1)
+    var strokesToGreen by mutableStateOf(0)
+    var strokesGreenToHoleOut by mutableStateOf(0)
 
     private val shotsFlow = MutableStateFlow<List<ShotEntity>>(emptyList())
     val shots: StateFlow<List<ShotEntity>> = shotsFlow
@@ -88,8 +90,8 @@ class RoundPlayViewModel(
         viewModelScope.launch {
             val existing = roundRepository.getRoundWithHoleRecords(roundId).first()
                 ?.holeRecords?.find { it.holeNumber == holeNumber }
-            strokesToGreen = existing?.strokesToGreen ?: 1
-            strokesGreenToHoleOut = existing?.strokesGreenToHoleOut ?: 1
+            strokesToGreen = existing?.strokesToGreen ?: 0
+            strokesGreenToHoleOut = existing?.strokesGreenToHoleOut ?: 0
         }
     }
 
@@ -122,6 +124,13 @@ class RoundPlayViewModel(
         val holeId = holes.value.find { it.holeNumber == currentHoleNumber }?.id ?: return
         viewModelScope.launch {
             courseRepository.updateGreenLocation(holeId, lat, lng)
+        }
+    }
+
+    fun resetGreenLocation() {
+        val holeId = holes.value.find { it.holeNumber == currentHoleNumber }?.id ?: return
+        viewModelScope.launch {
+            courseRepository.clearGreenLocation(holeId)
         }
     }
 }
@@ -210,6 +219,29 @@ fun RoundPlayScreen(
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
             val fixedLocation = currentLocation
+            if (greenLocation == null) {
+                if (online) {
+                    Text(
+                        "그린을 먼저 터치해서 지정해주세요",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        "그린이 설정되었습니다",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    TextButton(onClick = { viewModel.resetGreenLocation() }) { Text("그린 재지정") }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             when {
                 !hasLocationPermission -> Text("위치 권한이 필요합니다.")
                 online -> CourseMapView(
