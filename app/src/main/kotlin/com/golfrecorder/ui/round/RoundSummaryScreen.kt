@@ -1,5 +1,6 @@
 package com.golfrecorder.ui.round
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -69,6 +71,17 @@ private fun formatToPar(scoreToPar: Int): String = when {
     else -> "$scoreToPar"
 }
 
+private val BIRDIE_COLOR = Color(0xFFC8E6C9) // 연한 그린
+private val DOUBLE_BOGEY_COLOR = Color(0xFFFFF9C4) // 연한 노랑
+private val TRIPLE_BOGEY_OR_WORSE_COLOR = Color(0xFFFFCDD2) // 연한 빨강
+
+private fun scoreRowColor(scoreToPar: Int): Color = when {
+    scoreToPar == -1 -> BIRDIE_COLOR
+    scoreToPar == 2 -> DOUBLE_BOGEY_COLOR
+    scoreToPar >= 3 -> TRIPLE_BOGEY_OR_WORSE_COLOR
+    else -> Color.Transparent
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoundSummaryScreen(
@@ -103,6 +116,7 @@ fun RoundSummaryScreen(
                 items(holeResults, key = { it.holeNumber }) { hole ->
                     Row(
                         modifier = Modifier.fillMaxWidth()
+                            .background(scoreRowColor(hole.scoreToPar))
                             .clickable { onEditHole(hole.holeNumber) }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
