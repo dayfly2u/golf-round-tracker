@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -19,6 +20,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,6 +75,29 @@ fun RoundHistoryScreen(
     onRoundClick: (RoundSummary) -> Unit,
 ) {
     val rounds by viewModel.rounds.collectAsStateWithLifecycle()
+    var roundPendingDelete by remember { mutableStateOf<RoundSummary?>(null) }
+
+    roundPendingDelete?.let { round ->
+        AlertDialog(
+            onDismissRequest = { roundPendingDelete = null },
+            title = { Text("라운드를 삭제할까요?") },
+            text = {
+                Text(
+                    "${round.courseName} · ${formatRoundPeriod(round.playedAt, round.finishedAt)} 기록을 " +
+                        "삭제하면 되돌릴 수 없습니다."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.delete(round.roundId)
+                    roundPendingDelete = null
+                }) { Text("삭제") }
+            },
+            dismissButton = {
+                TextButton(onClick = { roundPendingDelete = null }) { Text("취소") }
+            },
+        )
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("K-Golf") }) },
@@ -98,7 +125,7 @@ fun RoundHistoryScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    TextButton(onClick = { viewModel.delete(round.roundId) }) { Text("삭제") }
+                    TextButton(onClick = { roundPendingDelete = round }) { Text("삭제") }
                 }
                 HorizontalDivider()
             }

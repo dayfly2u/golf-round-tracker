@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -18,6 +19,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -71,6 +75,29 @@ fun CourseSelectScreen(
     onBack: () -> Unit,
 ) {
     val courses by viewModel.courses.collectAsStateWithLifecycle()
+    var coursePendingDelete by remember { mutableStateOf<CourseEntity?>(null) }
+
+    coursePendingDelete?.let { course ->
+        AlertDialog(
+            onDismissRequest = { coursePendingDelete = null },
+            title = { Text("코스를 삭제할까요?") },
+            text = {
+                Text(
+                    "\"${course.name}\"을(를) 삭제하면 이 코스로 기록한 라운드도 함께 삭제되고 " +
+                        "되돌릴 수 없습니다."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.delete(course.id)
+                    coursePendingDelete = null
+                }) { Text("삭제") }
+            },
+            dismissButton = {
+                TextButton(onClick = { coursePendingDelete = null }) { Text("취소") }
+            },
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -101,7 +128,7 @@ fun CourseSelectScreen(
                     Text(course.name, fontWeight = FontWeight.Bold)
                     Row {
                         TextButton(onClick = { onEditCourse(course.id) }) { Text("수정") }
-                        TextButton(onClick = { viewModel.delete(course.id) }) {
+                        TextButton(onClick = { coursePendingDelete = course }) {
                             Text("삭제", color = MaterialTheme.colorScheme.error)
                         }
                     }
