@@ -44,9 +44,9 @@ class CourseSelectViewModel(
     val courses: StateFlow<List<CourseEntity>> = courseRepository.getCourses()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun startRound(courseId: Long, onStarted: (roundId: Long) -> Unit) {
+    fun startRound(courseId: Long, courseName: String, onStarted: (roundId: Long) -> Unit) {
         viewModelScope.launch {
-            val roundId = roundRepository.startRound(courseId, System.currentTimeMillis())
+            val roundId = roundRepository.startRound(courseId, courseName, System.currentTimeMillis())
             onStarted(roundId)
         }
     }
@@ -83,8 +83,9 @@ fun CourseSelectScreen(
             title = { Text("코스를 삭제할까요?") },
             text = {
                 Text(
-                    "\"${course.name}\"을(를) 삭제하면 이 코스로 기록한 라운드도 함께 삭제되고 " +
-                        "되돌릴 수 없습니다."
+                    "\"${course.name}\"을(를) 삭제하면 되돌릴 수 없습니다. " +
+                        "이 코스로 이미 기록한 라운드는 남지만, 홀 정보가 없어져서 " +
+                        "다시 수정할 수는 없습니다."
                 )
             },
             confirmButton = {
@@ -121,7 +122,11 @@ fun CourseSelectScreen(
             items(courses, key = { it.id }) { course ->
                 Row(
                     modifier = Modifier.fillMaxWidth()
-                        .clickable { viewModel.startRound(course.id) { roundId -> onCourseSelected(course.id, roundId) } }
+                        .clickable {
+                            viewModel.startRound(course.id, course.name) { roundId ->
+                                onCourseSelected(course.id, roundId)
+                            }
+                        }
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {

@@ -119,7 +119,16 @@ fun RoundHistoryScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column {
-                        Text(round.courseName, fontWeight = FontWeight.Bold)
+                        Row {
+                            Text(round.courseName, fontWeight = FontWeight.Bold)
+                            if (round.courseId == null) {
+                                Text(
+                                    " (삭제됨)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
+                        }
                         Text(
                             "${formatRoundPeriod(round.playedAt, round.finishedAt)} · 총 ${round.totalStrokes}타",
                             style = MaterialTheme.typography.bodySmall,

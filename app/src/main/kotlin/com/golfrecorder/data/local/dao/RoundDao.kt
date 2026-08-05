@@ -32,10 +32,9 @@ interface RoundDao {
     @Query(
         """
         SELECT r.id AS roundId, r.courseId AS courseId, r.playedAt AS playedAt,
-               r.finishedAt AS finishedAt, c.name AS courseName,
+               r.finishedAt AS finishedAt, r.courseName AS courseName,
                SUM(hr.strokesToGreen + hr.strokesGreenToHoleOut) AS totalStrokes
         FROM rounds r
-        JOIN courses c ON c.id = r.courseId
         LEFT JOIN hole_records hr ON hr.roundId = r.id
         GROUP BY r.id
         ORDER BY r.playedAt DESC

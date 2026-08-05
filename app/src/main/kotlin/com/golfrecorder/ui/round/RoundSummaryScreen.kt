@@ -27,7 +27,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import com.golfrecorder.data.repository.CourseRepository
 import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.domain.model.HoleResult
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,32 +36,37 @@ import kotlinx.coroutines.flow.stateIn
 
 class RoundSummaryViewModel(
     roundRepository: RoundRepository,
-    courseRepository: CourseRepository,
     roundId: Long,
-    courseId: Long,
+    /** null이면 이 라운드를 기록한 코스가 이미 삭제된 것 — 홀 수정은 코스의 그린 위치
+     * 등 홀 정보가 필요해서 코스가 남아있을 때만 가능하다. */
+    val courseId: Long?,
 ) : ViewModel() {
-    val holeResults: StateFlow<List<HoleResult>> = roundRepository.getRoundWithHoleRecords(roundId)
-        .map { roundWithRecords ->
-            roundWithRecords?.holeRecords.orEmpty()
-                .sortedBy { it.holeNumber }
-                .map { HoleResult(it.holeNumber, it.par, it.strokesToGreen, it.strokesGreenToHoleOut) }
+    private val roundWithRecords = roundRepository.getRoundWithHoleRecords(roundId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val holeResults: StateFlow<List<HoleResult>> = roundWithRecords
+        .map { it ->
+            it?.holeRecords.orEmpty()
+                .sortedBy { record -> record.holeNumber }
+                .map { record -> HoleResult(record.holeNumber, record.par, record.strokesToGreen, record.strokesGreenToHoleOut) }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val courseName: StateFlow<String> = courseRepository.getCourseWithHoles(courseId)
-        .map { it?.course?.name.orEmpty() }
+    // 라운드 시작 시점에 스냅샷으로 저장된 이름 — 코스가 나중에 삭제되거나
+    // 이름이 바뀌어도 "그때 그 코스"를 그대로 보여준다.
+    val courseName: StateFlow<String> = roundWithRecords
+        .map { it?.round?.courseName.orEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 }
 
 class RoundSummaryViewModelFactory(
     private val roundRepository: RoundRepository,
-    private val courseRepository: CourseRepository,
     private val roundId: Long,
-    private val courseId: Long,
+    private val courseId: Long?,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        RoundSummaryViewModel(roundRepository, courseRepository, roundId, courseId) as T
+        RoundSummaryViewModel(roundRepository, roundId, courseId) as T
 }
 
 private fun formatToPar(scoreToPar: Int): String = when {
@@ -95,7 +99,22 @@ fun RoundSummaryScreen(
     val girCount = holeResults.count { it.isGreenInRegulation }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(courseName.ifBlank { "라운드 결과" }) }) },
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row {
+                        Text(courseName.ifBlank { "라운드 결과" })
+                        if (viewModel.courseId == null && courseName.isNotBlank()) {
+                            Text(
+                                " (삭제됨)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                    }
+                },
+            )
+        },
         bottomBar = {
             Button(
                 onClick = onHome,
@@ -117,7 +136,7 @@ fun RoundSummaryScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .background(scoreRowColor(hole.scoreToPar))
-                            .clickable { onEditHole(hole.holeNumber) }
+                            .clickable(enabled = viewModel.courseId != null) { onEditHole(hole.holeNumber) }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {

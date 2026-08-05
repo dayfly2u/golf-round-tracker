@@ -6,5 +6,5 @@ sealed interface Screen {
     data object CourseSelect : Screen
     data class CourseEdit(val courseId: Long?) : Screen
     data class RoundPlay(val roundId: Long, val courseId: Long, val holeNumber: Int = 1) : Screen
-    data class RoundSummary(val roundId: Long, val courseId: Long) : Screen
+    data class RoundSummary(val roundId: Long, val courseId: Long?) : Screen
 }

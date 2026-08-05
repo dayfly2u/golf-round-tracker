@@ -135,7 +135,6 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
             val vm = viewModel<RoundSummaryViewModel>(
                 factory = RoundSummaryViewModelFactory(
                     container.roundRepository,
-                    container.courseRepository,
                     screen.roundId,
                     screen.courseId,
                 ),
@@ -143,7 +142,13 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
             )
             RoundSummaryScreen(
                 viewModel = vm,
-                onEditHole = { holeNumber -> push(Screen.RoundPlay(screen.roundId, screen.courseId, holeNumber)) },
+                onEditHole = { holeNumber ->
+                    // 코스가 삭제된 라운드는 화면에서 이미 이 콜백을 못 누르게 막아뒀지만,
+                    // courseId가 null이면 어차피 홀 정보를 불러올 수 없으니 한 번 더 막는다.
+                    screen.courseId?.let { courseId ->
+                        push(Screen.RoundPlay(screen.roundId, courseId, holeNumber))
+                    }
+                },
                 onHome = { goHome() },
             )
         }
