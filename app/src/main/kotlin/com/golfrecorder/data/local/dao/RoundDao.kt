@@ -44,4 +44,7 @@ interface RoundDao {
 
     @Query("DELETE FROM rounds WHERE id = :roundId")
     suspend fun deleteRound(roundId: Long)
+
+    @Query("SELECT COUNT(*) FROM rounds WHERE courseId = :courseId")
+    suspend fun countRoundsForCourse(courseId: Long): Int
 }

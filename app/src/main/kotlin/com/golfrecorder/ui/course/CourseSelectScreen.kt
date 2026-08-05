@@ -54,6 +54,17 @@ class CourseSelectViewModel(
     fun delete(courseId: Long) {
         viewModelScope.launch { courseRepository.deleteCourse(courseId) }
     }
+
+    /**
+     * 이 코스로 기록된 라운드가 있으면 삭제를 막는다 — 나중에 지도에서 예전 샷
+     * 위치를 다시 보려면 코스의 홀/그린 정보가 남아있어야 하기 때문이다.
+     * [onResult]에 남은 라운드 개수를 넘긴다(0이면 바로 삭제해도 된다는 뜻).
+     */
+    fun checkDeletable(courseId: Long, onResult: (roundCount: Int) -> Unit) {
+        viewModelScope.launch {
+            onResult(roundRepository.countRoundsForCourse(courseId))
+        }
+    }
 }
 
 class CourseSelectViewModelFactory(
@@ -76,18 +87,13 @@ fun CourseSelectScreen(
 ) {
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     var coursePendingDelete by remember { mutableStateOf<CourseEntity?>(null) }
+    var courseBlockedFromDelete by remember { mutableStateOf<Pair<CourseEntity, Int>?>(null) }
 
     coursePendingDelete?.let { course ->
         AlertDialog(
             onDismissRequest = { coursePendingDelete = null },
             title = { Text("코스를 삭제할까요?") },
-            text = {
-                Text(
-                    "\"${course.name}\"을(를) 삭제하면 되돌릴 수 없습니다. " +
-                        "이 코스로 이미 기록한 라운드는 남지만, 홀 정보가 없어져서 " +
-                        "다시 수정할 수는 없습니다."
-                )
-            },
+            text = { Text("\"${course.name}\"을(를) 삭제하면 되돌릴 수 없습니다.") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.delete(course.id)
@@ -96,6 +102,22 @@ fun CourseSelectScreen(
             },
             dismissButton = {
                 TextButton(onClick = { coursePendingDelete = null }) { Text("취소") }
+            },
+        )
+    }
+
+    courseBlockedFromDelete?.let { (course, roundCount) ->
+        AlertDialog(
+            onDismissRequest = { courseBlockedFromDelete = null },
+            title = { Text("삭제할 수 없습니다") },
+            text = {
+                Text(
+                    "\"${course.name}\"으로 기록된 라운드가 ${roundCount}개 있어 삭제할 수 없습니다. " +
+                        "홈 화면에서 그 라운드들을 먼저 삭제해주세요."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { courseBlockedFromDelete = null }) { Text("확인") }
             },
         )
     }
@@ -133,7 +155,15 @@ fun CourseSelectScreen(
                     Text(course.name, fontWeight = FontWeight.Bold)
                     Row {
                         TextButton(onClick = { onEditCourse(course.id) }) { Text("수정") }
-                        TextButton(onClick = { coursePendingDelete = course }) {
+                        TextButton(onClick = {
+                            viewModel.checkDeletable(course.id) { roundCount ->
+                                if (roundCount > 0) {
+                                    courseBlockedFromDelete = course to roundCount
+                                } else {
+                                    coursePendingDelete = course
+                                }
+                            }
+                        }) {
                             Text("삭제", color = MaterialTheme.colorScheme.error)
                         }
                     }

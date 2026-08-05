@@ -39,4 +39,6 @@ class RoundRepository(private val roundDao: RoundDao) {
     fun getRoundSummaries(): Flow<List<RoundSummary>> = roundDao.getRoundSummaries()
 
     suspend fun deleteRound(roundId: Long) = roundDao.deleteRound(roundId)
+
+    suspend fun countRoundsForCourse(courseId: Long): Int = roundDao.countRoundsForCourse(courseId)
 }
