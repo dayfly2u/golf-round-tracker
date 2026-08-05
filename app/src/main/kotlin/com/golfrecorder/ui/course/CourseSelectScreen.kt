@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -80,12 +80,12 @@ fun CourseSelectScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddCourse) { Text("+", style = MaterialTheme.typography.headlineSmall) }
+            ExtendedFloatingActionButton(onClick = onAddCourse) { Text("새 코스 추가!") }
         },
     ) { padding ->
         if (courses.isEmpty()) {
             Text(
-                "등록된 코스가 없습니다. + 버튼으로 코스를 추가하세요.",
+                "등록된 코스가 없습니다. \"새 코스 추가!\" 버튼을 눌러 추가하세요.",
                 modifier = Modifier.padding(padding).padding(16.dp),
             )
             return@Scaffold

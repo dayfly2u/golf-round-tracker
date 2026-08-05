@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -73,14 +73,14 @@ fun RoundHistoryScreen(
     val rounds by viewModel.rounds.collectAsStateWithLifecycle()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("골프 라운드 기록") }) },
+        topBar = { TopAppBar(title = { Text("K-Golf") }) },
         floatingActionButton = {
-            FloatingActionButton(onClick = onStartRound) { Text("+", style = MaterialTheme.typography.headlineSmall) }
+            ExtendedFloatingActionButton(onClick = onStartRound) { Text("새 라운딩 시작!") }
         },
     ) { padding ->
         if (rounds.isEmpty()) {
             Text(
-                "아직 기록된 라운드가 없습니다. + 버튼으로 새 라운드를 시작하세요.",
+                "아직 기록된 라운드가 없습니다. \"새 라운딩 시작!\" 버튼을 눌러 시작하세요.",
                 modifier = Modifier.padding(padding).padding(16.dp),
             )
             return@Scaffold
