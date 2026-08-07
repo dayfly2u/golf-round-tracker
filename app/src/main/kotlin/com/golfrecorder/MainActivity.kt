@@ -17,6 +17,9 @@ import com.golfrecorder.di.AppContainer
 import com.golfrecorder.ui.course.CourseEditScreen
 import com.golfrecorder.ui.course.CourseEditViewModel
 import com.golfrecorder.ui.course.CourseEditViewModelFactory
+import com.golfrecorder.ui.course.CourseManageScreen
+import com.golfrecorder.ui.course.CourseManageViewModel
+import com.golfrecorder.ui.course.CourseManageViewModelFactory
 import com.golfrecorder.ui.course.CourseSelectScreen
 import com.golfrecorder.ui.course.CourseSelectViewModel
 import com.golfrecorder.ui.course.CourseSelectViewModelFactory
@@ -82,6 +85,7 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
             RoundHistoryScreen(
                 viewModel = vm,
                 onStartRound = { push(Screen.CourseSelect) },
+                onManageCourses = { push(Screen.CourseManage) },
                 onRoundClick = { round -> push(Screen.RoundSummary(round.roundId, round.courseId)) },
             )
         }
@@ -93,6 +97,16 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
             CourseSelectScreen(
                 viewModel = vm,
                 onCourseSelected = { courseId, roundId -> push(Screen.RoundPlay(roundId, courseId, 1)) },
+                onBack = { pop() },
+            )
+        }
+
+        is Screen.CourseManage -> {
+            val vm = viewModel<CourseManageViewModel>(
+                factory = CourseManageViewModelFactory(container.courseRepository, container.roundRepository),
+            )
+            CourseManageScreen(
+                viewModel = vm,
                 onAddCourse = { push(Screen.CourseEdit(null)) },
                 onEditCourse = { courseId -> push(Screen.CourseEdit(courseId)) },
                 onBack = { pop() },

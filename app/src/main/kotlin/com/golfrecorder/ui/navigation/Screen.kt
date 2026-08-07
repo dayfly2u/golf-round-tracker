@@ -4,6 +4,7 @@ package com.golfrecorder.ui.navigation
 sealed interface Screen {
     data object Home : Screen
     data object CourseSelect : Screen
+    data object CourseManage : Screen
     data class CourseEdit(val courseId: Long?) : Screen
     data class RoundPlay(val roundId: Long, val courseId: Long, val holeNumber: Int = 1) : Screen
     data class RoundSummary(val roundId: Long, val courseId: Long?) : Screen
