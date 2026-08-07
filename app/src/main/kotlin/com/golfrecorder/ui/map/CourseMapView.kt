@@ -5,12 +5,14 @@ import com.golfrecorder.R
 import com.golfrecorder.domain.model.PenaltyType
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.location.LatLng as AppLatLng
+import com.golfrecorder.util.circlePoints
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
 import com.kakao.vectormap.shape.MapPoints
+import com.kakao.vectormap.shape.PolygonOptions
 import com.kakao.vectormap.shape.PolylineOptions
 import com.kakao.vectormap.shape.PolylineStyle
 import com.kakao.vectormap.shape.ShapeLayerOptions
@@ -30,6 +32,11 @@ internal const val MAP_ZOOM_LEVEL = 16
 
 private const val SHOT_LINE_LAYER_ID = "shot-lines"
 
+// 실제 그린 크기(대략 지름 50m)를 흉내낸 반지름.
+private const val GREEN_RADIUS_METERS = 25.0
+// 위성사진 자체에 초록(잔디)이 많아 녹색으로는 잘 안 보여서 노란색으로 표시한다.
+private const val GREEN_FILL_COLOR = "#CCFFEB3B" // 노랑, ARGB 약 80% 불투명도
+
 internal fun drawOverlays(
     map: KakaoMap,
     greenLocation: AppLatLng?,
@@ -48,6 +55,17 @@ internal fun drawOverlays(
             ShapeLayerOptions.from(SHOT_LINE_LAYER_ID, 10001, ShapeLayerPass.Overlay)
         )
     shapeLayer?.removeAll()
+    if (greenLocation != null) {
+        // Kakao의 DotPoints.fromCircle은 반지름 단위가 명확하지 않고(문서상 "px"),
+        // 실제로 그려보면 화면에 전혀 안 보이는 문제가 있었다. 대신 실제 위경도로
+        // 원 둘레 좌표를 직접 계산해서 폴리곤을 그린다 — 지리 좌표 기반이라
+        // 확대/축소하면 화면 크기도 실제 거리 비율대로 같이 변한다.
+        val circleLatLngs = circlePoints(greenLocation.lat, greenLocation.lng, GREEN_RADIUS_METERS)
+            .map { (lat, lng) -> LatLng.from(lat, lng) }
+        shapeLayer?.addPolygon(
+            PolygonOptions.from(MapPoints.fromLatLng(circleLatLngs), Color.parseColor(GREEN_FILL_COLOR))
+        )
+    }
     if (shots.size >= 2) {
         val toGreenLineStyle = PolylineStyle.from(5f, Color.parseColor(SHOT_RED))
         val shortGameLineStyle = PolylineStyle.from(5f, Color.parseColor(SHOT_BLUE))
@@ -64,18 +82,6 @@ internal fun drawOverlays(
     }
 
     labelLayer.removeAll()
-
-    if (greenLocation != null) {
-        // 아이콘이 핀이 아니라 원형이라 실제 좌표는 원의 중심이어야 한다.
-        // 기본 anchor(0.5, 1.0=하단 중심)를 쓰면 좌표가 원 아래쪽 끝에 고정되어
-        // 탭한 위치보다 위로 떠 보인다.
-        val greenStyles = map.labelManager?.addLabelStyles(
-            LabelStyles.from("green-pin", LabelStyle.from(R.drawable.ic_green_pin).setAnchorPoint(0.5f, 0.5f))
-        )
-        labelLayer.addLabel(
-            LabelOptions.from(LatLng.from(greenLocation.lat, greenLocation.lng)).setStyles(greenStyles)
-        )
-    }
 
     val toGreenStyles = map.labelManager?.addLabelStyles(
         LabelStyles.from("shot-to-green", LabelStyle.from(R.drawable.ic_dot_red).setAnchorPoint(0.5f, 0.5f))

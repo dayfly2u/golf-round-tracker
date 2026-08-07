@@ -1,5 +1,6 @@
 package com.golfrecorder.util
 
+import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -27,3 +28,29 @@ fun bearingDegrees(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Doub
     val theta = atan2(y, x)
     return (Math.toDegrees(theta) + 360) % 360
 }
+
+/** (lat,lng)에서 [bearingDeg] 방향으로 [distanceMeters]만큼 떨어진 좌표. */
+fun destinationPoint(lat: Double, lng: Double, bearingDeg: Double, distanceMeters: Double): Pair<Double, Double> {
+    val phi1 = Math.toRadians(lat)
+    val lambda1 = Math.toRadians(lng)
+    val theta = Math.toRadians(bearingDeg)
+    val delta = distanceMeters / EARTH_RADIUS_METERS
+
+    val phi2 = asin(sin(phi1) * cos(delta) + cos(phi1) * sin(delta) * cos(theta))
+    val lambda2 = lambda1 + atan2(
+        sin(theta) * sin(delta) * cos(phi1),
+        cos(delta) - sin(phi1) * sin(phi2)
+    )
+    return Math.toDegrees(phi2) to Math.toDegrees(lambda2)
+}
+
+/**
+ * 중심 좌표를 기준으로 반경 [radiusMeters]짜리 원을 이루는 [segments]개의 좌표를 만든다.
+ * 지도 SDK의 화면 픽셀 기반 원 API에 기대는 대신, 실제 지리 좌표로 원을 그려서
+ * 확대/축소할 때 화면 크기가 실제 거리 비율대로 같이 변하게 한다.
+ */
+fun circlePoints(lat: Double, lng: Double, radiusMeters: Double, segments: Int = 36): List<Pair<Double, Double>> =
+    (0 until segments).map { i ->
+        val bearing = 360.0 * i / segments
+        destinationPoint(lat, lng, bearing, radiusMeters)
+    }
