@@ -27,15 +27,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.golfrecorder.data.repository.CourseRepository
 import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.domain.model.HoleResult
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 class RoundSummaryViewModel(
     roundRepository: RoundRepository,
+    courseRepository: CourseRepository,
     roundId: Long,
     /** null이면 이 라운드를 기록한 코스가 이미 삭제된 것 — 홀 수정은 코스의 그린 위치
      * 등 홀 정보가 필요해서 코스가 남아있을 때만 가능하다. */
@@ -44,13 +49,25 @@ class RoundSummaryViewModel(
     private val roundWithRecords = roundRepository.getRoundWithHoleRecords(roundId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val holeResults: StateFlow<List<HoleResult>> = roundWithRecords
-        .map { it ->
-            it?.holeRecords.orEmpty()
-                .sortedBy { record -> record.holeNumber }
-                .map { record -> HoleResult(record.holeNumber, record.par, record.strokesToGreen, record.strokesGreenToHoleOut) }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // 코스에서 나중에 파를 고치면 이미 기록된 라운드의 이븐/보기 표시도 최신 파
+    // 기준으로 다시 계산되길 원해서(사용자 확정), hole_records에 저장해 둔 par가
+    // 아니라 코스의 현재 par를 우선 쓴다. 코스가 삭제됐거나 그 홀이 이제 코스에
+    // 없으면(홀 수를 줄인 경우 등) 저장된 값으로 돌아간다.
+    private val liveParByHole: Flow<Map<Int, Int>> = if (courseId != null) {
+        courseRepository.getCourseWithHoles(courseId)
+            .map { it?.holes.orEmpty().associate { hole -> hole.holeNumber to hole.par } }
+    } else {
+        flowOf(emptyMap())
+    }
+
+    val holeResults: StateFlow<List<HoleResult>> = combine(roundWithRecords, liveParByHole) { round, liveParByHole ->
+        round?.holeRecords.orEmpty()
+            .sortedBy { record -> record.holeNumber }
+            .map { record ->
+                val par = liveParByHole[record.holeNumber] ?: record.par
+                HoleResult(record.holeNumber, par, record.strokesToGreen, record.strokesGreenToHoleOut)
+            }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // 라운드 시작 시점에 스냅샷으로 저장된 이름 — 코스가 나중에 삭제되거나
     // 이름이 바뀌어도 "그때 그 코스"를 그대로 보여준다.
@@ -61,12 +78,13 @@ class RoundSummaryViewModel(
 
 class RoundSummaryViewModelFactory(
     private val roundRepository: RoundRepository,
+    private val courseRepository: CourseRepository,
     private val roundId: Long,
     private val courseId: Long?,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        RoundSummaryViewModel(roundRepository, roundId, courseId) as T
+        RoundSummaryViewModel(roundRepository, courseRepository, roundId, courseId) as T
 }
 
 private fun formatToPar(scoreToPar: Int): String = when {

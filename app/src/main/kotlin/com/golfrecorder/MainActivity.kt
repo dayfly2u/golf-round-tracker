@@ -149,6 +149,7 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
             val vm = viewModel<RoundSummaryViewModel>(
                 factory = RoundSummaryViewModelFactory(
                     container.roundRepository,
+                    container.courseRepository,
                     screen.roundId,
                     screen.courseId,
                 ),
