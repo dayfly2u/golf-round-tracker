@@ -41,11 +41,20 @@ fun StrokeStepper(
         ButtonDefaults.ContentPadding
     }
     val buttonHeight = if (compact) 28.dp else ButtonDefaults.MinHeight
+    // "−"와 "+" 글자의 실제 폭이 폰트상 서로 달라서, 폭을 안 정해주면 두 버튼
+    // 크기가 미묘하게 달라 보인다. compact에서만 고정폭을 준다 — 기본 크기는
+    // Material 기본 패딩이 넉넉해서 눈에 띄는 차이가 없었다.
+    val buttonWidth = if (compact) 36.dp else null
     val buttonTextStyle = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelLarge
     val buttonColors = if (buttonColor != null) {
         ButtonDefaults.buttonColors(containerColor = buttonColor)
     } else {
         ButtonDefaults.buttonColors()
+    }
+    val buttonModifier = if (buttonWidth != null) {
+        Modifier.height(buttonHeight).width(buttonWidth)
+    } else {
+        Modifier.height(buttonHeight)
     }
 
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
@@ -60,7 +69,7 @@ fun StrokeStepper(
             enabled = value > minValue,
             colors = buttonColors,
             contentPadding = buttonPadding,
-            modifier = Modifier.height(buttonHeight),
+            modifier = buttonModifier,
         ) { Text("−", style = buttonTextStyle) }
         Text(
             "$value",
@@ -72,7 +81,7 @@ fun StrokeStepper(
             onClick = { onValueChange(value + 1) },
             colors = buttonColors,
             contentPadding = buttonPadding,
-            modifier = Modifier.height(buttonHeight),
+            modifier = buttonModifier,
         ) { Text("+", style = buttonTextStyle) }
     }
 }
