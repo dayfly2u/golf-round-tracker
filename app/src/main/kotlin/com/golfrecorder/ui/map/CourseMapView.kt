@@ -27,13 +27,17 @@ data class PenaltyPoint(val type: PenaltyType, val lat: Double, val lng: Double)
 private const val SHOT_RED = "#E53935"
 private const val SHOT_BLUE = "#1E88E5"
 
-// 골프 한 홀(티~그린) 정도가 화면에 들어오는 정도로 시작 — 값이 높을수록 확대됨.
-internal const val MAP_ZOOM_LEVEL = 16
+// 파5(최대 약 600m) 한 홀이 가로로 다 들어오는 정도를 목표로 잡음 — 값이
+// 높을수록 확대됨. 표준 웹 메르카토르 배율(위도 37°N, 화면 가로 1080px 기준)로
+// 역산하면 레벨 16은 화면 가로가 약 2000m로 너무 넓고, 18이 약 500~550m로
+// 600m 목표에 가장 가깝다. SDK가 이 배율을 그대로 따르는지는 문서로 확인이
+// 안 돼서 추정치 — 실제로 봤을 때 다르면 조정 필요.
+internal const val MAP_ZOOM_LEVEL = 18
 
 private const val SHOT_LINE_LAYER_ID = "shot-lines"
 
-// 실제 그린 크기(대략 지름 50m)를 흉내낸 반지름.
-private const val GREEN_RADIUS_METERS = 25.0
+// 실제 그린 크기(대략 지름 30m)를 흉내낸 반지름.
+private const val GREEN_RADIUS_METERS = 15.0
 // 위성사진 자체에 초록(잔디)이 많아 녹색으로는 잘 안 보여서 노란색으로 표시한다.
 private const val GREEN_FILL_COLOR = "#CCFFEB3B" // 노랑, ARGB 약 80% 불투명도
 
