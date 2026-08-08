@@ -27,6 +27,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.golfrecorder.data.local.relation.CourseWithHoles
 import com.golfrecorder.data.repository.CourseRepository
 import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.domain.model.HoleResult
@@ -49,18 +50,19 @@ class RoundSummaryViewModel(
     private val roundWithRecords = roundRepository.getRoundWithHoleRecords(roundId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    // 코스에서 나중에 파를 고치면 이미 기록된 라운드의 이븐/보기 표시도 최신 파
-    // 기준으로 다시 계산되길 원해서(사용자 확정), hole_records에 저장해 둔 par가
-    // 아니라 코스의 현재 par를 우선 쓴다. 코스가 삭제됐거나 그 홀이 이제 코스에
-    // 없으면(홀 수를 줄인 경우 등) 저장된 값으로 돌아간다.
-    private val liveParByHole: Flow<Map<Int, Int>> = if (courseId != null) {
+    // 코스가 남아있는 동안은 파/이름 둘 다 코스의 최신 값을 우선 쓴다(사용자 확정) —
+    // 코스에서 파를 고치면 이미 기록된 라운드의 이븐/보기 표시도, 코스 이름을
+    // 바꾸면 라운드 목록/제목도 최신 값으로 보여야 한다는 요청. 코스가 삭제됐거나
+    // (courseId == null) 그 홀이 이제 코스에 없으면(홀 수를 줄인 경우 등) 라운드
+    // 시작 시점에 저장해 둔 스냅샷으로 돌아간다.
+    private val liveCourse: Flow<CourseWithHoles?> = if (courseId != null) {
         courseRepository.getCourseWithHoles(courseId)
-            .map { it?.holes.orEmpty().associate { hole -> hole.holeNumber to hole.par } }
     } else {
-        flowOf(emptyMap())
+        flowOf(null)
     }
 
-    val holeResults: StateFlow<List<HoleResult>> = combine(roundWithRecords, liveParByHole) { round, liveParByHole ->
+    val holeResults: StateFlow<List<HoleResult>> = combine(roundWithRecords, liveCourse) { round, course ->
+        val liveParByHole = course?.holes.orEmpty().associate { hole -> hole.holeNumber to hole.par }
         round?.holeRecords.orEmpty()
             .sortedBy { record -> record.holeNumber }
             .map { record ->
@@ -69,11 +71,9 @@ class RoundSummaryViewModel(
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // 라운드 시작 시점에 스냅샷으로 저장된 이름 — 코스가 나중에 삭제되거나
-    // 이름이 바뀌어도 "그때 그 코스"를 그대로 보여준다.
-    val courseName: StateFlow<String> = roundWithRecords
-        .map { it?.round?.courseName.orEmpty() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+    val courseName: StateFlow<String> = combine(roundWithRecords, liveCourse) { round, course ->
+        course?.course?.name ?: round?.round?.courseName.orEmpty()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 }
 
 class RoundSummaryViewModelFactory(
