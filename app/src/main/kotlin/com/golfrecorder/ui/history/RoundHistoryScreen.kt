@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,6 +61,7 @@ class RoundHistoryViewModelFactory(
 
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
 private val timeFormat = SimpleDateFormat("HH:mm", Locale.KOREA)
+private val priceFormat = NumberFormat.getNumberInstance(Locale.KOREA)
 
 private fun formatRoundPeriod(playedAt: Long, finishedAt: Long?): String {
     val date = dateFormat.format(Date(playedAt))
@@ -148,6 +150,13 @@ fun RoundHistoryScreen(
                             "${formatRoundPeriod(round.playedAt, round.finishedAt)} · 총 ${round.totalStrokes}타",
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        val infoLine = listOfNotNull(
+                            round.price?.let { "${priceFormat.format(it)}원" },
+                            round.companions?.takeIf { it.isNotBlank() },
+                        ).joinToString(" | ")
+                        if (infoLine.isNotBlank()) {
+                            Text(infoLine, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     TextButton(onClick = { roundPendingDelete = round }) { Text("삭제") }
                 }

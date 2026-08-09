@@ -6,5 +6,7 @@ data class RoundSummary(
     val playedAt: Long,
     val finishedAt: Long?,
     val courseName: String,
+    val price: Int?,
+    val companions: String?,
     val totalStrokes: Int
 )

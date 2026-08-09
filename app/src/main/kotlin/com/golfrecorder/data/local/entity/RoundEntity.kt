@@ -28,5 +28,8 @@ data class RoundEntity(
     val courseName: String,
     val playedAt: Long,
     val finishedAt: Long? = null,
-    val memo: String? = null
+    // 라운딩 리뷰 — 전부 선택 입력.
+    val price: Int? = null,
+    val companions: String? = null,
+    val review: String? = null,
 )

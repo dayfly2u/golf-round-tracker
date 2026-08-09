@@ -20,6 +20,17 @@ interface RoundDao {
     @Query("UPDATE rounds SET finishedAt = :finishedAt WHERE id = :roundId")
     suspend fun updateFinishedAt(roundId: Long, finishedAt: Long)
 
+    @Query(
+        """
+        UPDATE rounds SET
+            price = :price,
+            companions = :companions,
+            review = :review
+        WHERE id = :roundId
+        """
+    )
+    suspend fun updateRoundReview(roundId: Long, price: Int?, companions: String?, review: String?)
+
     // roundId+holeNumber에 unique index가 걸려 있어서, 같은 홀을 다시 저장하면
     // REPLACE로 덮어씀 (라운드 중 스코어 수정 흐름을 그대로 지원)
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -34,6 +45,7 @@ interface RoundDao {
         SELECT r.id AS roundId, r.courseId AS courseId, r.playedAt AS playedAt,
                r.finishedAt AS finishedAt,
                COALESCE(c.name, r.courseName) AS courseName,
+               r.price AS price, r.companions AS companions,
                SUM(hr.strokesToGreen + hr.strokesGreenToHoleOut) AS totalStrokes
         FROM rounds r
         LEFT JOIN courses c ON c.id = r.courseId

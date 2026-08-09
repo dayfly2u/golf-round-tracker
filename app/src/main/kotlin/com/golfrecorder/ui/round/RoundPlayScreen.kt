@@ -1,6 +1,7 @@
 package com.golfrecorder.ui.round
 
 import android.Manifest
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -131,6 +132,24 @@ class RoundPlayViewModel(
         }
     }
 
+    /**
+     * 뒤로가기 시: 아직 한 홀도 저장 안 된(= 코스만 고르고 바로 나가는) 라운드는
+     * 목록에 빈 라운드가 남는 걸 막기 위해 통째로 지운다. 이미 진행된 라운드는
+     * 남겨두고 홀 리스트(라운드 결과) 화면을 보여준다.
+     */
+    fun exitRound(onCancelled: () -> Unit, onHasProgress: () -> Unit) {
+        viewModelScope.launch {
+            val hasProgress = roundRepository.getRoundWithHoleRecords(roundId).first()
+                ?.holeRecords?.isNotEmpty() == true
+            if (hasProgress) {
+                onHasProgress()
+            } else {
+                roundRepository.deleteRound(roundId)
+                onCancelled()
+            }
+        }
+    }
+
     private fun saveCurrentHole(after: () -> Unit) {
         val par = holes.value.find { it.holeNumber == currentHoleNumber }?.par ?: 4
         viewModelScope.launch {
@@ -230,11 +249,17 @@ fun RoundPlayScreen(
     viewModel: RoundPlayViewModel,
     mapSlotState: MapSlotState,
     onFinished: () -> Unit,
-    onBack: () -> Unit,
+    onCancelled: () -> Unit,
+    onShowSummary: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shotMutex = remember { Mutex() }
+
+    fun handleBack() {
+        viewModel.exitRound(onCancelled = onCancelled, onHasProgress = onShowSummary)
+    }
+    BackHandler { handleBack() }
 
     val holes by viewModel.holes.collectAsStateWithLifecycle()
     val shots by viewModel.shots.collectAsStateWithLifecycle()
@@ -297,7 +322,7 @@ fun RoundPlayScreen(
         topBar = {
             TopAppBar(
                 title = { Text("${viewModel.currentHoleNumber}홀 (파 $par)") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("< 뒤로") } },
+                navigationIcon = { TextButton(onClick = { handleBack() }) { Text("< 뒤로") } },
             )
         },
     ) { padding ->
