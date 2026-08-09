@@ -1,6 +1,7 @@
 package com.golfrecorder.ui.course
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -92,25 +93,10 @@ fun CourseSelectScreen(
                             }
                         }
                         .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column {
-                        Row {
-                            Text(course.name, fontWeight = FontWeight.Bold)
-                            if (course.rating != null) {
-                                Text(
-                                    "  ★ ${course.rating}",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                            if (course.difficulty != null) {
-                                Text(
-                                    "  ★${course.difficulty}",
-                                    color = Color.Red,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
+                        Text(course.name, fontWeight = FontWeight.Bold)
                         val infoLine = listOfNotNull(
                             course.region?.takeIf { it.isNotBlank() },
                             course.distance?.takeIf { it.isNotBlank() },
@@ -118,6 +104,22 @@ fun CourseSelectScreen(
                         ).joinToString(" | ")
                         if (infoLine.isNotBlank()) {
                             Text(infoLine, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Row {
+                        if (course.rating != null) {
+                            Text(
+                                "★ ${course.rating}",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        if (course.difficulty != null) {
+                            Text(
+                                "  ★${course.difficulty}",
+                                color = Color.Red,
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
                     }
                 }
