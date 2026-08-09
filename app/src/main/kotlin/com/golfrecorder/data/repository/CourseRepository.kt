@@ -21,6 +21,21 @@ class CourseRepository(private val courseDao: CourseDao) {
     suspend fun updateCourseName(courseId: Long, name: String) =
         courseDao.updateCourseName(courseId, name)
 
+    suspend fun updateCourseReview(
+        courseId: Long,
+        rating: Double?,
+        difficulty: Int?,
+        region: String?,
+        distance: String?,
+        travelTime: String?,
+        oneLineReview: String?,
+        transportInfo: String?,
+        clubhouseInfo: String?,
+        courseInfo: String?,
+    ) = courseDao.updateCourseReview(
+        courseId, rating, difficulty, region, distance, travelTime, oneLineReview, transportInfo, clubhouseInfo, courseInfo,
+    )
+
     suspend fun updateGreenLocation(holeId: Long, lat: Double, lng: Double) =
         courseDao.updateGreenLocation(holeId, lat, lng)
 

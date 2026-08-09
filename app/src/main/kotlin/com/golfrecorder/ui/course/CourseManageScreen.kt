@@ -4,8 +4,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,6 +72,12 @@ class CourseManageViewModelFactory(
         CourseManageViewModel(courseRepository, roundRepository) as T
 }
 
+@Composable
+private fun ReviewSection(label: String, content: String) {
+    Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+    Text(content, style = MaterialTheme.typography.bodySmall)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CourseManageScreen(
@@ -81,6 +89,7 @@ fun CourseManageScreen(
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     var coursePendingDelete by remember { mutableStateOf<CourseEntity?>(null) }
     var courseBlockedFromDelete by remember { mutableStateOf<Pair<CourseEntity, Int>?>(null) }
+    var expandedCourseIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
     coursePendingDelete?.let { course ->
         AlertDialog(
@@ -135,30 +144,102 @@ fun CourseManageScreen(
         }
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             Text(
-                "코스를 수정하려면 코스 이름을 클릭하세요.",
+                "코스 상세 리뷰를 보시려면 코스 이름을 클릭하세요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(courses, key = { it.id }) { course ->
-                    Row(
+                    val expanded = course.id in expandedCourseIds
+                    Column(
                         modifier = Modifier.fillMaxWidth()
-                            .clickable { onEditCourse(course.id) }
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(course.name, fontWeight = FontWeight.Bold)
-                        TextButton(onClick = {
-                            viewModel.checkDeletable(course.id) { roundCount ->
-                                if (roundCount > 0) {
-                                    courseBlockedFromDelete = course to roundCount
+                            .clickable {
+                                expandedCourseIds = if (expanded) {
+                                    expandedCourseIds - course.id
                                 } else {
-                                    coursePendingDelete = course
+                                    expandedCourseIds + course.id
                                 }
                             }
-                        }) {
-                            Text("삭제", color = MaterialTheme.colorScheme.error)
+                            .padding(16.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row {
+                                    Text(course.name, fontWeight = FontWeight.Bold)
+                                    if (course.rating != null) {
+                                        Text(
+                                            "  ★ ${course.rating}",
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                    if (course.difficulty != null) {
+                                        Text(
+                                            "  D ${difficultyLabel(course.difficulty)}",
+                                            color = MaterialTheme.colorScheme.secondary,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                }
+                                val infoLine = listOfNotNull(
+                                    course.region?.takeIf { it.isNotBlank() },
+                                    course.distance?.takeIf { it.isNotBlank() },
+                                    course.travelTime?.takeIf { it.isNotBlank() },
+                                ).joinToString(" | ")
+                                if (infoLine.isNotBlank()) {
+                                    Text(infoLine, style = MaterialTheme.typography.bodySmall)
+                                }
+                                if (!course.oneLineReview.isNullOrBlank()) {
+                                    Text(
+                                        course.oneLineReview.chunked(25).joinToString("\n"),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            }
+                            Row {
+                                TextButton(onClick = { onEditCourse(course.id) }) { Text("수정") }
+                                TextButton(onClick = {
+                                    viewModel.checkDeletable(course.id) { roundCount ->
+                                        if (roundCount > 0) {
+                                            courseBlockedFromDelete = course to roundCount
+                                        } else {
+                                            coursePendingDelete = course
+                                        }
+                                    }
+                                }) {
+                                    Text("삭제", color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                        if (expanded) {
+                            Column(modifier = Modifier.padding(top = 12.dp)) {
+                                val hasDetail = !course.transportInfo.isNullOrBlank() ||
+                                    !course.clubhouseInfo.isNullOrBlank() ||
+                                    !course.courseInfo.isNullOrBlank()
+                                if (!hasDetail) {
+                                    Text(
+                                        "입력된 리뷰 상세 정보가 없습니다. \"수정\"에서 추가할 수 있습니다.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                } else {
+                                    course.transportInfo?.takeIf { it.isNotBlank() }?.let {
+                                        ReviewSection("교통", it)
+                                        Spacer(Modifier.height(8.dp))
+                                    }
+                                    course.clubhouseInfo?.takeIf { it.isNotBlank() }?.let {
+                                        ReviewSection("클럽하우스", it)
+                                        Spacer(Modifier.height(8.dp))
+                                    }
+                                    course.courseInfo?.takeIf { it.isNotBlank() }?.let {
+                                        ReviewSection("코스", it)
+                                    }
+                                }
+                            }
                         }
                     }
                     HorizontalDivider()

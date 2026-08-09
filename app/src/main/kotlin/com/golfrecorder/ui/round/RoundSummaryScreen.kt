@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -150,7 +150,18 @@ fun RoundSummaryScreen(
             }
             HorizontalDivider()
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(holeResults, key = { it.holeNumber }) { hole ->
+                itemsIndexed(holeResults, key = { _, hole -> hole.holeNumber }) { index, hole ->
+                    if (index == 9) {
+                        Text(
+                            "후반",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .background(scoreRowColor(hole.scoreToPar))

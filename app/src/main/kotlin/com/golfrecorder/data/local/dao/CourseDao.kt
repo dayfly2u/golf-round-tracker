@@ -34,6 +34,34 @@ interface CourseDao {
     @Query("UPDATE courses SET name = :name WHERE id = :courseId")
     suspend fun updateCourseName(courseId: Long, name: String)
 
+    @Query(
+        """
+        UPDATE courses SET
+            rating = :rating,
+            difficulty = :difficulty,
+            region = :region,
+            distance = :distance,
+            travelTime = :travelTime,
+            oneLineReview = :oneLineReview,
+            transportInfo = :transportInfo,
+            clubhouseInfo = :clubhouseInfo,
+            courseInfo = :courseInfo
+        WHERE id = :courseId
+        """
+    )
+    suspend fun updateCourseReview(
+        courseId: Long,
+        rating: Double?,
+        difficulty: Int?,
+        region: String?,
+        distance: String?,
+        travelTime: String?,
+        oneLineReview: String?,
+        transportInfo: String?,
+        clubhouseInfo: String?,
+        courseInfo: String?,
+    )
+
     @Query("UPDATE holes SET greenLat = :lat, greenLng = :lng WHERE id = :holeId")
     suspend fun updateGreenLocation(holeId: Long, lat: Double, lng: Double)
 
