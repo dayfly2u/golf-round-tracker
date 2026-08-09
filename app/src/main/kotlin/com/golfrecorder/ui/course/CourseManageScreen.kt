@@ -2,6 +2,7 @@ package com.golfrecorder.ui.course
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -132,28 +133,36 @@ fun CourseManageScreen(
             )
             return@Scaffold
         }
-        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
-            items(courses, key = { it.id }) { course ->
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .clickable { onEditCourse(course.id) }
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(course.name, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = {
-                        viewModel.checkDeletable(course.id) { roundCount ->
-                            if (roundCount > 0) {
-                                courseBlockedFromDelete = course to roundCount
-                            } else {
-                                coursePendingDelete = course
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            Text(
+                "코스를 수정하려면 코스 이름을 클릭하세요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(courses, key = { it.id }) { course ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { onEditCourse(course.id) }
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(course.name, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = {
+                            viewModel.checkDeletable(course.id) { roundCount ->
+                                if (roundCount > 0) {
+                                    courseBlockedFromDelete = course to roundCount
+                                } else {
+                                    coursePendingDelete = course
+                                }
                             }
+                        }) {
+                            Text("삭제", color = MaterialTheme.colorScheme.error)
                         }
-                    }) {
-                        Text("삭제", color = MaterialTheme.colorScheme.error)
                     }
+                    HorizontalDivider()
                 }
-                HorizontalDivider()
             }
         }
     }

@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -77,14 +75,6 @@ class CourseEditViewModel(
             onDone()
         }
     }
-
-    fun delete(onDone: () -> Unit) {
-        val id = existingCourseId ?: return
-        viewModelScope.launch {
-            courseRepository.deleteCourse(id)
-            onDone()
-        }
-    }
 }
 
 class CourseEditViewModelFactory(
@@ -108,6 +98,9 @@ fun CourseEditScreen(
             TopAppBar(
                 title = { Text(if (isNew) "코스 추가" else "코스 수정") },
                 navigationIcon = { TextButton(onClick = onBack) { Text("< 뒤로") } },
+                actions = {
+                    TextButton(onClick = { viewModel.save(onBack) }) { Text("저장") }
+                },
             )
         },
     ) { padding ->
@@ -135,17 +128,6 @@ fun CourseEditScreen(
                                 onClick = { viewModel.setPar(index, par) },
                                 label = { Text("파$par") },
                             )
-                        }
-                    }
-                }
-            }
-            item {
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { viewModel.save(onBack) }) { Text("저장") }
-                    if (!isNew) {
-                        TextButton(onClick = { viewModel.delete(onBack) }) {
-                            Text("삭제", color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
