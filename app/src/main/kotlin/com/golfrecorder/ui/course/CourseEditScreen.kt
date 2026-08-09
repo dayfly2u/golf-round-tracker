@@ -236,7 +236,8 @@ fun CourseEditScreen(
                     if (viewModel.difficulty <= 0f) {
                         "난이도: 없음"
                     } else {
-                        "난이도: ${difficultyLabel(viewModel.difficulty.roundToInt())}"
+                        val level = viewModel.difficulty.roundToInt()
+                        "난이도: ${difficultyLabel(level)} ($level)"
                     },
                 )
                 Slider(
