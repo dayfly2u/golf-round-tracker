@@ -36,8 +36,8 @@ internal const val MAP_ZOOM_LEVEL = 18
 
 private const val SHOT_LINE_LAYER_ID = "shot-lines"
 
-// 실제 그린 크기(대략 지름 30m)를 흉내낸 반지름.
-private const val GREEN_RADIUS_METERS = 15.0
+// 그린 전체가 아니라 핀(홀)의 정확한 위치를 표시하는 작은 원.
+private const val GREEN_RADIUS_METERS = 2.0
 // 위성사진 자체에 초록(잔디)이 많아 녹색으로는 잘 안 보여서 노란색으로 표시한다.
 private const val GREEN_FILL_COLOR = "#CCFFEB3B" // 노랑, ARGB 약 80% 불투명도
 

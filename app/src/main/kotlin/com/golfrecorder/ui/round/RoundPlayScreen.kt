@@ -336,7 +336,7 @@ fun RoundPlayScreen(
             if (greenLocation == null) {
                 if (online) {
                     Text(
-                        "그린을 먼저 터치해서 지정해주세요",
+                        "그린에서 정확한 핀위치를 지정해주세요",
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                     )
@@ -348,11 +348,11 @@ fun RoundPlayScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        "그린이 설정되었습니다",
+                        "핀위치가 설정되었습니다",
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                     )
-                    TextButton(onClick = { viewModel.resetGreenLocation() }) { Text("그린 재지정") }
+                    TextButton(onClick = { viewModel.resetGreenLocation() }) { Text("핀 재지정") }
                 }
                 Spacer(Modifier.height(8.dp))
             }
