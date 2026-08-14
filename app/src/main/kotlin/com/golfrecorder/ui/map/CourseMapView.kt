@@ -27,12 +27,13 @@ data class PenaltyPoint(val type: PenaltyType, val lat: Double, val lng: Double)
 private const val SHOT_RED = "#E53935"
 private const val SHOT_BLUE = "#1E88E5"
 
-// 파5(최대 약 600m) 한 홀이 가로로 다 들어오는 정도를 목표로 잡음 — 값이
-// 높을수록 확대됨. 표준 웹 메르카토르 배율(위도 37°N, 화면 가로 1080px 기준)로
-// 역산하면 레벨 16은 화면 가로가 약 2000m로 너무 넓고, 18이 약 500~550m로
-// 600m 목표에 가장 가깝다. SDK가 이 배율을 그대로 따르는지는 문서로 확인이
-// 안 돼서 추정치 — 실제로 봤을 때 다르면 조정 필요.
-internal const val MAP_ZOOM_LEVEL = 18
+// 필드 테스트 결과 600m(레벨 18)로는 홀 전체가 화면에 안 들어오는 경우가 많아
+// 가로세로 약 1200m가 보이도록 한 단계 축소함 — 값이 높을수록 확대됨. 표준 웹
+// 메르카토르 배율(위도 37°N, 화면 가로 1080px 기준)로 역산하면 레벨 16은 화면
+// 가로가 약 2000m, 18이 약 500~550m라 그 중간인 17이 1200m 목표에 가장 가깝다.
+// SDK가 이 배율을 그대로 따르는지는 문서로 확인이 안 돼서 추정치 — 실제로 봤을
+// 때 다르면 조정 필요.
+internal const val MAP_ZOOM_LEVEL = 17
 
 private const val SHOT_LINE_LAYER_ID = "shot-lines"
 

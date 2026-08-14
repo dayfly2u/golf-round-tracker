@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -76,7 +77,7 @@ class RoundPlayViewModel(
     private val courseRepository: CourseRepository,
     private val shotRepository: ShotRepository,
     private val penaltyRepository: PenaltyRepository,
-    private val roundId: Long,
+    val roundId: Long,
     courseId: Long,
     initialHoleNumber: Int,
 ) : ViewModel() {
@@ -89,6 +90,11 @@ class RoundPlayViewModel(
     var strokesToGreen by mutableStateOf(0)
     var strokesGreenToHoleOut by mutableStateOf(0)
 
+    /** 18홀 라운드 자체가 이미 끝난 뒤(결과 화면에서 홀 수정하러 들어온 경우)인지 —
+     * "위치 조정"은 라운드가 끝나기 전까지는 어느 홀에서든 쓸 수 있고, 끝난 뒤에만 막는다. */
+    var roundAlreadyFinished by mutableStateOf(false)
+        private set
+
     private val shotsFlow = MutableStateFlow<List<ShotEntity>>(emptyList())
     val shots: StateFlow<List<ShotEntity>> = shotsFlow
     private var shotsCollectJob: Job? = null
@@ -99,6 +105,10 @@ class RoundPlayViewModel(
 
     init {
         loadHole(initialHoleNumber)
+        viewModelScope.launch {
+            roundAlreadyFinished = roundRepository.getRoundWithHoleRecords(roundId).first()
+                ?.round?.finishedAt != null
+        }
     }
 
     private fun loadHole(holeNumber: Int) {
@@ -291,6 +301,17 @@ fun RoundPlayScreen(
         }
     }
 
+    var recenterSignal by remember { mutableStateOf(0) }
+    fun recenterOnCurrentLocation() {
+        scope.launch {
+            val loc = LocationCapture.getCurrentLocation(context)
+            if (loc != null) {
+                currentLocation = loc
+                recenterSignal += 1
+            }
+        }
+    }
+
     fun onStepperChange(phase: ShotPhase, oldValue: Int, newValue: Int, applyValue: (Int) -> Unit) {
         applyValue(newValue)
         scope.launch {
@@ -333,26 +354,42 @@ fun RoundPlayScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             val fixedLocation = currentLocation
+            val showRecenterButton = !viewModel.roundAlreadyFinished && hasLocationPermission && online
             if (greenLocation == null) {
                 if (online) {
-                    Text(
-                        "그린에서 정확한 핀위치를 지정해주세요",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "그린에서 정확한 핀위치를 지정해주세요",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (showRecenterButton) {
+                            TextButton(onClick = { recenterOnCurrentLocation() }) { Text("위치 조정") }
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                 }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         "핀위치가 설정되었습니다",
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                     )
-                    TextButton(onClick = { viewModel.resetGreenLocation() }) { Text("핀 재지정") }
+                    Row {
+                        TextButton(onClick = { viewModel.resetGreenLocation() }) { Text("핀 재지정") }
+                        if (showRecenterButton) {
+                            TextButton(onClick = { recenterOnCurrentLocation() }) { Text("위치 조정") }
+                        }
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -360,13 +397,15 @@ fun RoundPlayScreen(
                 !hasLocationPermission -> Text("위치 권한이 필요합니다.")
                 online -> CourseMapSlot(
                     state = mapSlotState,
-                    cameraKey = "hole-${viewModel.currentHoleNumber}",
+                    cameraKey = "round-${viewModel.roundId}-hole-${viewModel.currentHoleNumber}",
                     greenLocation = greenLocation,
                     currentLocation = fixedLocation,
                     shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
                     penalties = penalties.map { PenaltyPoint(PenaltyType.valueOf(it.type), it.lat, it.lng) },
                     tapToSetGreen = greenLocation == null,
                     onGreenTap = { tapped -> viewModel.setGreenLocation(tapped.lat, tapped.lng) },
+                    recenterSignal = recenterSignal,
+                    preferCurrentLocation = !viewModel.roundAlreadyFinished,
                 )
                 greenLocation != null && fixedLocation != null -> {
                     val distance = haversineMeters(

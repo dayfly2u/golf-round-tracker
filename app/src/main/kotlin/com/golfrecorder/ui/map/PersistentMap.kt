@@ -56,6 +56,12 @@ internal class MapRequest(
     val penalties: List<PenaltyPoint>,
     val tapToSetGreen: Boolean,
     val onGreenTap: (AppLatLng) -> Unit,
+    /** 0보다 크게 바뀔 때마다 그린/타수 상태와 무관하게 지도를 [currentLocation]으로
+     * 강제 이동시킨다 — "위치 조정" 버튼용. 값 자체는 의미 없고 변경 여부만 쓴다. */
+    val recenterSignal: Int = 0,
+    /** 라운드 진행 중에는 현재 위치를, 이미 끝난 라운드를 리뷰/수정할 때는 그린 위치를
+     * 자동 카메라 중심 우선순위로 쓴다 — 리뷰 중엔 보는 사람의 GPS 위치가 그 홀과 무관하다. */
+    val preferCurrentLocation: Boolean = true,
 )
 
 /**
@@ -101,6 +107,8 @@ fun CourseMapSlot(
     tapToSetGreen: Boolean,
     onGreenTap: (AppLatLng) -> Unit,
     modifier: Modifier = Modifier,
+    recenterSignal: Int = 0,
+    preferCurrentLocation: Boolean = true,
 ) {
     var offset by remember { mutableStateOf<IntOffset?>(null) }
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -131,6 +139,8 @@ fun CourseMapSlot(
         shots,
         penalties,
         tapToSetGreen,
+        recenterSignal,
+        preferCurrentLocation,
     ) {
         if (currentOffset != null && size.width > 0 && size.height > 0) {
             state.update(
@@ -144,6 +154,8 @@ fun CourseMapSlot(
                     penalties = penalties,
                     tapToSetGreen = tapToSetGreen,
                     onGreenTap = stableOnGreenTap,
+                    recenterSignal = recenterSignal,
+                    preferCurrentLocation = preferCurrentLocation,
                 )
             )
         }
@@ -176,7 +188,16 @@ fun PersistentCourseMap(state: MapSlotState) {
     val size = request?.size?.takeIf { it.width > 0 }
         ?: state.lastSize.takeIf { it.width > 0 }
         ?: defaultSize
-    val offset = request?.offset ?: IntOffset(0, HIDDEN_OFFSET_Y)
+
+    // 카메라가 "지금 요청 중인 홀/라운드" 기준으로 옮겨지기 전까지는 화면 밖에
+    // 숨겨둔다 — 안 그러면 이전 홀/라운드의 위치가 그대로 남아있는 지도가
+    // 잠깐이라도 먼저 보여서(새 라운드 시작 직후 등) 혼란을 준다.
+    var centeredCameraKey by remember { mutableStateOf<String?>(null) }
+    val offset = if (request != null && request.cameraKey == centeredCameraKey) {
+        request.offset
+    } else {
+        IntOffset(0, HIDDEN_OFFSET_Y)
+    }
 
     AndroidView(
         modifier = Modifier
@@ -220,16 +241,40 @@ fun PersistentCourseMap(state: MapSlotState) {
     )
 
     // 카메라 이동은 홀이 바뀌거나 중심 좌표가 생겼을 때만. 샷을 추가했다고 해서
-    // 사용자가 움직여 둔 지도를 다시 끌어오지 않는다.
+    // 사용자가 움직여 둔 지도를 다시 끌어오지 않는다. 라운드 진행 중엔 현재 위치를
+    // 그린보다 우선해야 실제로 서 있는 곳이 보인다(안 그러면 홀을 오갈 때마다 "위치
+    // 조정"으로 맞춰둔 화면이 그린 중심으로 튕겨나간다) — 반대로 이미 끝난 라운드를
+    // 리뷰/수정할 때는 리뷰하는 사람의 GPS 위치가 그 홀과 무관하므로 그린을 우선한다.
     val cameraKey = request?.cameraKey
-    val center = request?.greenLocation ?: request?.currentLocation
+    val center = if (request?.preferCurrentLocation == true) {
+        request.currentLocation ?: request.greenLocation
+    } else {
+        request?.greenLocation ?: request?.currentLocation
+    }
     LaunchedEffect(kakaoMapState.value, cameraKey, center) {
         val map = kakaoMapState.value ?: return@LaunchedEffect
-        if (center != null) {
+        if (cameraKey != null && center != null) {
             // Kakao Vector Map(Android SDK)은 숫자가 높을수록 확대(Web API와 반대 방향).
             map.moveCamera(
                 CameraUpdateFactory.newCenterPosition(LatLng.from(center.lat, center.lng), MAP_ZOOM_LEVEL)
             )
+            centeredCameraKey = cameraKey
+        }
+    }
+
+    // "위치 조정" 버튼 전용 강제 이동 — 위 effect가 이미 현재 위치를 우선하지만,
+    // GPS fix가 갱신되기 전 값으로 이동한 뒤일 수 있어 버튼을 누르면 그 시점의
+    // 최신 위치로 한 번 더 확실히 맞춘다.
+    val recenterSignal = request?.recenterSignal ?: 0
+    LaunchedEffect(kakaoMapState.value, recenterSignal) {
+        val map = kakaoMapState.value ?: return@LaunchedEffect
+        val target = request?.currentLocation
+        val key = request?.cameraKey
+        if (recenterSignal > 0 && target != null) {
+            map.moveCamera(
+                CameraUpdateFactory.newCenterPosition(LatLng.from(target.lat, target.lng), MAP_ZOOM_LEVEL)
+            )
+            if (key != null) centeredCameraKey = key
         }
     }
 
