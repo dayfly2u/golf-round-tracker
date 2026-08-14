@@ -355,7 +355,9 @@ fun RoundPlayScreen(
         ) {
             val fixedLocation = currentLocation
             val showRecenterButton = !viewModel.roundAlreadyFinished && hasLocationPermission && online
-            if (greenLocation == null) {
+            // 이미 끝난 라운드를 리뷰할 때는 핀을 새로 지정할 일이 없으니(리뷰하는
+            // 사람의 GPS 위치도 그 홀과 무관) 핀 관련 안내/버튼을 아예 보여주지 않는다.
+            if (greenLocation == null && !viewModel.roundAlreadyFinished) {
                 if (online) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -373,7 +375,9 @@ fun RoundPlayScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                 }
-            } else {
+            } else if (greenLocation != null && !viewModel.roundAlreadyFinished) {
+                // 이미 끝난 라운드를 리뷰할 때는 이 홀의 핀 위치를 새로 바꿀 일이 없으니
+                // "핀위치가 설정되었습니다" 안내와 "핀 재지정" 버튼 모두 의미가 없다.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -402,7 +406,7 @@ fun RoundPlayScreen(
                     currentLocation = fixedLocation,
                     shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
                     penalties = penalties.map { PenaltyPoint(PenaltyType.valueOf(it.type), it.lat, it.lng) },
-                    tapToSetGreen = greenLocation == null,
+                    tapToSetGreen = greenLocation == null && !viewModel.roundAlreadyFinished,
                     onGreenTap = { tapped -> viewModel.setGreenLocation(tapped.lat, tapped.lng) },
                     recenterSignal = recenterSignal,
                     preferCurrentLocation = !viewModel.roundAlreadyFinished,
