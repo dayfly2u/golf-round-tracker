@@ -168,13 +168,19 @@ class RoundPlayViewModel(
         }
     }
 
-    /** 호출자(Composable)가 GPS fix를 잡아온 뒤 순서를 보장해 호출하는 suspend 함수. */
-    suspend fun recordShot(phase: ShotPhase, shotIndex: Int, lat: Double, lng: Double) {
-        shotRepository.recordShot(roundId, currentHoleNumber, phase, shotIndex, lat, lng)
+    /**
+     * 호출자(Composable)가 GPS fix를 잡아온 뒤 순서를 보장해 호출하는 suspend 함수.
+     * [holeNumber]는 버튼을 누른 시점의 홀 번호를 호출자가 캡처해서 넘긴다 — GPS fix를
+     * 기다리는 동안 사용자가 다음 홀로 넘어가면 그 사이 [currentHoleNumber]가 바뀌어서,
+     * 여기서 그 값을 다시 읽으면 이 샷이 엉뚱한(새) 홀에 기록되어 지도에 이전 홀
+     * 마지막 샷과 새 홀 첫 샷을 잇는 있어선 안 될 선이 그려지는 버그가 있었다.
+     */
+    suspend fun recordShot(holeNumber: Int, phase: ShotPhase, shotIndex: Int, lat: Double, lng: Double) {
+        shotRepository.recordShot(roundId, holeNumber, phase, shotIndex, lat, lng)
     }
 
-    suspend fun removeShot(phase: ShotPhase, shotIndex: Int) {
-        shotRepository.removeShot(roundId, currentHoleNumber, phase, shotIndex)
+    suspend fun removeShot(holeNumber: Int, phase: ShotPhase, shotIndex: Int) {
+        shotRepository.removeShot(roundId, holeNumber, phase, shotIndex)
     }
 
     /**
@@ -313,14 +319,18 @@ fun RoundPlayScreen(
     }
 
     fun onStepperChange(phase: ShotPhase, oldValue: Int, newValue: Int, applyValue: (Int) -> Unit) {
+        // GPS fix를 기다리는 동안 홀이 바뀔 수 있어, 지금 화면의 홀 번호를 미리 캡처해
+        // 넘긴다 — viewModel.currentHoleNumber를 나중에 다시 읽으면 이미 다음 홀로
+        // 바뀌어 있을 수 있다.
+        val holeNumber = viewModel.currentHoleNumber
         applyValue(newValue)
         scope.launch {
             shotMutex.withLock {
                 if (newValue > oldValue) {
                     val loc = if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
-                    if (loc != null) viewModel.recordShot(phase, newValue, loc.lat, loc.lng)
+                    if (loc != null) viewModel.recordShot(holeNumber, phase, newValue, loc.lat, loc.lng)
                 } else if (newValue < oldValue) {
-                    viewModel.removeShot(phase, oldValue)
+                    viewModel.removeShot(holeNumber, phase, oldValue)
                 }
             }
         }

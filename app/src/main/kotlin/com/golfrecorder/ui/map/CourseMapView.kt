@@ -77,7 +77,13 @@ internal fun drawOverlays(
         for (i in 0 until shots.size - 1) {
             val from = shots[i]
             val to = shots[i + 1]
-            // 선 색은 출발점(이전 샷)의 원 색상과 동일하게 맞춘다.
+            // 빨강(그린까지)에서 파랑(숏게임/퍼팅)으로 이어지는 선은 어프로치 후
+            // 그린 주변으로 넘어가는 정상적인 연결이라 그린다. 하지만 그 반대 —
+            // 파랑에서 빨강으로 되돌아가는 선 — 은 절대 있을 수 없는 순서다(정상
+            // 데이터는 항상 TO_GREEN 구간이 먼저, SHORT_GAME 구간이 나중). 홀 전환
+            // 중 위치 기록 경합 등으로 리스트에 이런 순서가 섞여 들어오더라도 지도에는
+            // 절대 그리지 않는 방어 로직.
+            if (from.phase == ShotPhase.SHORT_GAME && to.phase == ShotPhase.TO_GREEN) continue
             val segmentStyle = if (from.phase == ShotPhase.TO_GREEN) toGreenLineStyle else shortGameLineStyle
             val segmentPoints = MapPoints.fromLatLng(
                 listOf(LatLng.from(from.lat, from.lng), LatLng.from(to.lat, to.lng))
