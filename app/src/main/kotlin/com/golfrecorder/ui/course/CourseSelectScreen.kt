@@ -109,7 +109,7 @@ fun CourseSelectScreen(
                     Row {
                         if (course.rating != null) {
                             Text(
-                                "★ ${course.rating}",
+                                "★ ${"%.1f".format(course.rating)}",
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold,
                             )

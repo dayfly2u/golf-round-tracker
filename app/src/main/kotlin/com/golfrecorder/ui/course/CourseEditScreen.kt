@@ -116,7 +116,10 @@ class CourseEditViewModel(
             }
             courseRepository.updateCourseReview(
                 courseId = courseId,
-                rating = if (rating <= 0f) null else rating.toDouble(),
+                // Slider가 내놓는 Float는 0.5 단위 스텝이어도 부동소수점 오차로
+                // 3.4999998 같은 값이 나올 수 있어, Double로 그냥 바꾸면 그 오차가
+                // 소수점 자리수로 그대로 남는다 — 가장 가까운 0.5 단위로 반올림한다.
+                rating = if (rating <= 0f) null else Math.round(rating * 2) / 2.0,
                 difficulty = if (difficulty <= 0f) null else difficulty.roundToInt(),
                 region = region.trim().ifBlank { null },
                 distance = distance.trim().ifBlank { null },
@@ -222,7 +225,7 @@ fun CourseEditScreen(
                 Text("리뷰 (선택 입력)", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (viewModel.rating <= 0f) "총평점: 없음" else "총평점: ${viewModel.rating}",
+                    if (viewModel.rating <= 0f) "총평점: 없음" else "총평점: ${"%.1f".format(viewModel.rating)}",
                 )
                 Slider(
                     value = viewModel.rating,

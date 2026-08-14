@@ -173,7 +173,7 @@ fun CourseManageScreen(
                                     Text(course.name, fontWeight = FontWeight.Bold)
                                     if (course.rating != null) {
                                         Text(
-                                            "  ★ ${course.rating}",
+                                            "  ★ ${"%.1f".format(course.rating)}",
                                             color = MaterialTheme.colorScheme.primary,
                                             fontWeight = FontWeight.Bold,
                                         )
@@ -196,7 +196,7 @@ fun CourseManageScreen(
                                 }
                                 if (!course.oneLineReview.isNullOrBlank()) {
                                     Text(
-                                        course.oneLineReview.chunked(25).joinToString("\n"),
+                                        course.oneLineReview.chunked(30).joinToString("\n"),
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
