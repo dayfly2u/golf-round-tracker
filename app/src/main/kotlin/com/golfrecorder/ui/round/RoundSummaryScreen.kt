@@ -128,16 +128,21 @@ private fun formatToPar(scoreToPar: Int): String = when {
     else -> "$scoreToPar"
 }
 
-private val BIRDIE_COLOR = Color(0xFFC8E6C9) // 연한 그린
-private val DOUBLE_BOGEY_COLOR = Color(0xFFFFF9C4) // 연한 노랑
-private val TRIPLE_BOGEY_OR_WORSE_COLOR = Color(0xFFFFCDD2) // 연한 빨강
+private val PAR_COLOR = Color(0xFFC8E6C9) // 연한 그린
+private val BIRDIE_OR_BETTER_COLOR = Color(0xFFBBDEFB) // 연한 파랑
+private val DOUBLE_BOGEY_COLOR = Color(0xFFFFCDD2) // 연한 빨강
+private val WORSE_THAN_DOUBLE_BOGEY_COLOR = Color(0xFFB71C1C) // 진한 빨강
 
 private fun scoreRowColor(scoreToPar: Int): Color = when {
-    scoreToPar == -1 -> BIRDIE_COLOR
+    scoreToPar == 0 -> PAR_COLOR
+    scoreToPar <= -1 -> BIRDIE_OR_BETTER_COLOR
     scoreToPar == 2 -> DOUBLE_BOGEY_COLOR
-    scoreToPar >= 3 -> TRIPLE_BOGEY_OR_WORSE_COLOR
+    scoreToPar >= 3 -> WORSE_THAN_DOUBLE_BOGEY_COLOR
     else -> Color.Transparent
 }
+
+private fun scoreRowTextColor(scoreToPar: Int): Color =
+    if (scoreToPar >= 3) Color.White else Color.Unspecified
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -186,9 +191,9 @@ fun RoundSummaryScreen(
             HorizontalDivider()
             LazyColumn(modifier = Modifier.weight(1f)) {
                 itemsIndexed(holeResults, key = { _, hole -> hole.holeNumber }) { index, hole ->
-                    if (index == 9) {
+                    if (index == 0 || index == 9) {
                         Text(
-                            "후반",
+                            if (index == 0) "전반" else "후반",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.outline,
@@ -197,6 +202,7 @@ fun RoundSummaryScreen(
                                 .padding(horizontal = 16.dp, vertical = 4.dp),
                         )
                     }
+                    val textColor = scoreRowTextColor(hole.scoreToPar)
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .background(scoreRowColor(hole.scoreToPar))
@@ -204,9 +210,9 @@ fun RoundSummaryScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("${hole.holeNumber}홀 (파${hole.par})", fontWeight = FontWeight.Bold)
-                        Text("그린 ${hole.strokesToGreen} · 숏/퍼팅 ${hole.strokesGreenToHoleOut}")
-                        Text("${hole.totalStrokes}타 (${formatToPar(hole.scoreToPar)})")
+                        Text("${hole.holeNumber}홀 (파${hole.par})", fontWeight = FontWeight.Bold, color = textColor)
+                        Text("그린 ${hole.strokesToGreen} · 숏/퍼팅 ${hole.strokesGreenToHoleOut}", color = textColor)
+                        Text("${hole.totalStrokes}타 (${formatToPar(hole.scoreToPar)})", color = textColor)
                     }
                     HorizontalDivider()
                 }

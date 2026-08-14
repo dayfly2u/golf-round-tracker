@@ -74,11 +74,12 @@ private fun formatRoundPeriod(playedAt: Long, finishedAt: Long?): String {
     return if (end != null) "$date $start~$end" else "$date $start~"
 }
 
-private val STROKE_LIGHT_RED = Color(0xFFFFCDD2)
+private val STROKE_LIGHT_BLUE = Color(0xFFBBDEFB)
 private val STROKE_LIGHT_GREEN = Color(0xFFC8E6C9)
+private val STROKE_LIGHT_RED = Color(0xFFFFCDD2)
 
 private fun strokeScoreColor(strokes: Int): Color? = when {
-    strokes in 80..89 -> STROKE_LIGHT_RED
+    strokes in 80..89 -> STROKE_LIGHT_BLUE
     strokes in 90..94 -> STROKE_LIGHT_GREEN
     strokes >= 100 -> STROKE_LIGHT_RED
     else -> null
