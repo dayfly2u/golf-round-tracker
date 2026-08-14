@@ -181,9 +181,9 @@ fun CourseEditScreen(
                 if (index == 0) {
                     Text(
                         "전반 (1~9)",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                 } else if (index == 9) {
@@ -192,9 +192,9 @@ fun CourseEditScreen(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "후반 (10~18)",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                 }

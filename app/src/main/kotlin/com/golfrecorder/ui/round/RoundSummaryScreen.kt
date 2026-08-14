@@ -201,12 +201,12 @@ fun RoundSummaryScreen(
                     if (index == 0 || index == 9) {
                         Text(
                             if (index == 0) "전반" else "후반",
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.outline,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
                         )
                     }
                     val textColor = scoreRowTextColor(hole.scoreToPar)
