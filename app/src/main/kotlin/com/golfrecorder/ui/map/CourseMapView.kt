@@ -6,17 +6,21 @@ import com.golfrecorder.domain.model.PenaltyType
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.util.circlePoints
+import com.golfrecorder.util.haversineMeters
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.label.LabelOptions
 import com.kakao.vectormap.label.LabelStyle
 import com.kakao.vectormap.label.LabelStyles
+import com.kakao.vectormap.label.LabelTextBuilder
+import com.kakao.vectormap.label.LabelTextStyle
 import com.kakao.vectormap.shape.MapPoints
 import com.kakao.vectormap.shape.PolygonOptions
 import com.kakao.vectormap.shape.PolylineOptions
 import com.kakao.vectormap.shape.PolylineStyle
 import com.kakao.vectormap.shape.ShapeLayerOptions
 import com.kakao.vectormap.shape.ShapeLayerPass
+import kotlin.math.roundToInt
 
 data class ShotPoint(val phase: ShotPhase, val lat: Double, val lng: Double)
 
@@ -41,6 +45,10 @@ private const val SHOT_LINE_LAYER_ID = "shot-lines"
 private const val GREEN_RADIUS_METERS = 2.0
 // 위성사진 자체에 초록(잔디)이 많아 녹색으로는 잘 안 보여서 노란색으로 표시한다.
 private const val GREEN_FILL_COLOR = "#CCFFEB3B" // 노랑, ARGB 약 80% 불투명도
+
+// 샷 구간 거리 라벨 — 위성사진 위에서 잘 보이도록 흰 글씨에 검은 외곽선을 준다.
+private const val DISTANCE_LABEL_TEXT_SIZE = 28
+private const val DISTANCE_LABEL_STROKE_WIDTH = 4
 
 internal fun drawOverlays(
     map: KakaoMap,
@@ -71,19 +79,19 @@ internal fun drawOverlays(
             PolygonOptions.from(MapPoints.fromLatLng(circleLatLngs), Color.parseColor(GREEN_FILL_COLOR))
         )
     }
-    if (shots.size >= 2) {
+    // 빨강(그린까지)에서 파랑(숏게임/퍼팅)으로 이어지는 선은 어프로치 후 그린
+    // 주변으로 넘어가는 정상적인 연결이라 그린다. 하지만 그 반대 — 파랑에서
+    // 빨강으로 되돌아가는 선 — 은 절대 있을 수 없는 순서다(정상 데이터는 항상
+    // TO_GREEN 구간이 먼저, SHORT_GAME 구간이 나중). 홀 전환 중 위치 기록 경합
+    // 등으로 리스트에 이런 순서가 섞여 들어오더라도 지도에는 절대 그리지 않는다.
+    val segments = (0 until shots.size - 1)
+        .map { i -> shots[i] to shots[i + 1] }
+        .filterNot { (from, to) -> from.phase == ShotPhase.SHORT_GAME && to.phase == ShotPhase.TO_GREEN }
+
+    if (segments.isNotEmpty()) {
         val toGreenLineStyle = PolylineStyle.from(5f, Color.parseColor(SHOT_RED))
         val shortGameLineStyle = PolylineStyle.from(5f, Color.parseColor(SHOT_BLUE))
-        for (i in 0 until shots.size - 1) {
-            val from = shots[i]
-            val to = shots[i + 1]
-            // 빨강(그린까지)에서 파랑(숏게임/퍼팅)으로 이어지는 선은 어프로치 후
-            // 그린 주변으로 넘어가는 정상적인 연결이라 그린다. 하지만 그 반대 —
-            // 파랑에서 빨강으로 되돌아가는 선 — 은 절대 있을 수 없는 순서다(정상
-            // 데이터는 항상 TO_GREEN 구간이 먼저, SHORT_GAME 구간이 나중). 홀 전환
-            // 중 위치 기록 경합 등으로 리스트에 이런 순서가 섞여 들어오더라도 지도에는
-            // 절대 그리지 않는 방어 로직.
-            if (from.phase == ShotPhase.SHORT_GAME && to.phase == ShotPhase.TO_GREEN) continue
+        segments.forEach { (from, to) ->
             val segmentStyle = if (from.phase == ShotPhase.TO_GREEN) toGreenLineStyle else shortGameLineStyle
             val segmentPoints = MapPoints.fromLatLng(
                 listOf(LatLng.from(from.lat, from.lng), LatLng.from(to.lat, to.lng))
@@ -103,6 +111,27 @@ internal fun drawOverlays(
     shots.forEach { shot ->
         val styles = if (shot.phase == ShotPhase.TO_GREEN) toGreenStyles else shortGameStyles
         labelLayer.addLabel(LabelOptions.from(LatLng.from(shot.lat, shot.lng)).setStyles(styles))
+    }
+
+    if (segments.isNotEmpty()) {
+        val distanceLabelStyles = map.labelManager?.addLabelStyles(
+            LabelStyles.from(
+                "shot-distance",
+                LabelStyle.from(
+                    LabelTextStyle.from(DISTANCE_LABEL_TEXT_SIZE, Color.WHITE, DISTANCE_LABEL_STROKE_WIDTH, Color.BLACK)
+                )
+            )
+        )
+        segments.forEach { (from, to) ->
+            val distanceMeters = haversineMeters(from.lat, from.lng, to.lat, to.lng)
+            val midLat = (from.lat + to.lat) / 2
+            val midLng = (from.lng + to.lng) / 2
+            labelLayer.addLabel(
+                LabelOptions.from(LatLng.from(midLat, midLng))
+                    .setStyles(distanceLabelStyles)
+                    .setTexts(LabelTextBuilder().setTexts("${distanceMeters.roundToInt()}m"))
+            )
+        }
     }
 
     val obStyles = map.labelManager?.addLabelStyles(

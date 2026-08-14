@@ -60,6 +60,13 @@ class RoundSummaryViewModel(
     private val roundWithRecords = roundRepository.getRoundWithHoleRecords(roundId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    /** "완료" 버튼을 눌러 라운드가 끝났는지 — 홀을 눌러 들어갈 때 라이브 플레이로
+     * 취급할지 리뷰 전용으로 취급할지 이 값으로 결정한다. [roundWithRecords]의 현재
+     * 값을 그대로 읽는다 — 별도 StateFlow로 파생시키면 아무도 구독하지 않는 한
+     * WhileSubscribed 정책 때문에 초기값(false)에서 절대 갱신되지 않는 문제가 있었다. */
+    val isFinished: Boolean
+        get() = roundWithRecords.value?.round?.finishedAt != null
+
     var price by mutableStateOf("")
     var companions by mutableStateOf("")
     var review by mutableStateOf("")

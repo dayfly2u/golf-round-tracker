@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -80,6 +81,12 @@ class RoundPlayViewModel(
     val roundId: Long,
     courseId: Long,
     initialHoleNumber: Int,
+    /** 라운드가 이미 "완료"된 뒤 결과 화면에서 홀을 리뷰하러 들어온 것인지 — true면
+     * 지금 서 있는 곳이 그 홀과 무관하므로(라이브 플레이가 아님) 위치 조정/핀 재지정과
+     * 타수·OB·해저드·숏게임 입력 UI를 모두 끄고 읽기 전용으로 보여준다. 아직 완료 전인
+     * 라운드는 결과 화면에서 홀을 눌러도 이어서 플레이하는 것이므로 false로 들어온다
+     * (호출자가 그 라운드의 finishedAt 여부를 보고 결정해서 넘긴다). */
+    val isReview: Boolean,
 ) : ViewModel() {
     val holes: StateFlow<List<HoleEntity>> = courseRepository.getCourseWithHoles(courseId)
         .map { it?.holes.orEmpty().sortedBy { hole -> hole.holeNumber } }
@@ -89,11 +96,6 @@ class RoundPlayViewModel(
         private set
     var strokesToGreen by mutableStateOf(0)
     var strokesGreenToHoleOut by mutableStateOf(0)
-
-    /** 18홀 라운드 자체가 이미 끝난 뒤(결과 화면에서 홀 수정하러 들어온 경우)인지 —
-     * "위치 조정"은 라운드가 끝나기 전까지는 어느 홀에서든 쓸 수 있고, 끝난 뒤에만 막는다. */
-    var roundAlreadyFinished by mutableStateOf(false)
-        private set
 
     private val shotsFlow = MutableStateFlow<List<ShotEntity>>(emptyList())
     val shots: StateFlow<List<ShotEntity>> = shotsFlow
@@ -105,10 +107,6 @@ class RoundPlayViewModel(
 
     init {
         loadHole(initialHoleNumber)
-        viewModelScope.launch {
-            roundAlreadyFinished = roundRepository.getRoundWithHoleRecords(roundId).first()
-                ?.round?.finishedAt != null
-        }
     }
 
     private fun loadHole(holeNumber: Int) {
@@ -245,6 +243,7 @@ class RoundPlayViewModelFactory(
     private val roundId: Long,
     private val courseId: Long,
     private val initialHoleNumber: Int,
+    private val isReview: Boolean,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -256,6 +255,7 @@ class RoundPlayViewModelFactory(
             roundId,
             courseId,
             initialHoleNumber,
+            isReview,
         ) as T
 }
 
@@ -307,6 +307,7 @@ fun RoundPlayScreen(
         }
     }
 
+    var showFinishConfirm by remember { mutableStateOf(false) }
     var recenterSignal by remember { mutableStateOf(0) }
     fun recenterOnCurrentLocation() {
         scope.launch {
@@ -364,10 +365,10 @@ fun RoundPlayScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             val fixedLocation = currentLocation
-            val showRecenterButton = !viewModel.roundAlreadyFinished && hasLocationPermission && online
+            val showRecenterButton = !viewModel.isReview && hasLocationPermission && online
             // 이미 끝난 라운드를 리뷰할 때는 핀을 새로 지정할 일이 없으니(리뷰하는
             // 사람의 GPS 위치도 그 홀과 무관) 핀 관련 안내/버튼을 아예 보여주지 않는다.
-            if (greenLocation == null && !viewModel.roundAlreadyFinished) {
+            if (greenLocation == null && !viewModel.isReview) {
                 if (online) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -385,7 +386,7 @@ fun RoundPlayScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                 }
-            } else if (greenLocation != null && !viewModel.roundAlreadyFinished) {
+            } else if (greenLocation != null && !viewModel.isReview) {
                 // 이미 끝난 라운드를 리뷰할 때는 이 홀의 핀 위치를 새로 바꿀 일이 없으니
                 // "핀위치가 설정되었습니다" 안내와 "핀 재지정" 버튼 모두 의미가 없다.
                 Row(
@@ -416,10 +417,10 @@ fun RoundPlayScreen(
                     currentLocation = fixedLocation,
                     shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
                     penalties = penalties.map { PenaltyPoint(PenaltyType.valueOf(it.type), it.lat, it.lng) },
-                    tapToSetGreen = greenLocation == null && !viewModel.roundAlreadyFinished,
+                    tapToSetGreen = greenLocation == null && !viewModel.isReview,
                     onGreenTap = { tapped -> viewModel.setGreenLocation(tapped.lat, tapped.lng) },
                     recenterSignal = recenterSignal,
-                    preferCurrentLocation = !viewModel.roundAlreadyFinished,
+                    preferCurrentLocation = !viewModel.isReview,
                 )
                 greenLocation != null && fixedLocation != null -> {
                     val distance = haversineMeters(
@@ -442,49 +443,59 @@ fun RoundPlayScreen(
             }
 
             Spacer(Modifier.height(16.dp))
-            StrokeStepper(
-                label = "그린까지 타수",
-                value = viewModel.strokesToGreen,
-                onValueChange = { newValue ->
-                    val old = viewModel.strokesToGreen
-                    onStepperChange(ShotPhase.TO_GREEN, old, newValue) { viewModel.strokesToGreen = it }
-                },
-            )
-            Spacer(Modifier.height(4.dp))
-            Row {
-                PenaltyStepper(
-                    label = "OB",
-                    value = obToGreenCount,
-                    buttonColor = PENALTY_OB_COLOR,
-                    addAmounts = listOf(1, 2),
-                    canRemove = obToGreenCount > 0,
-                    onAdd = { strokeCount -> onAddPenalty(ShotPhase.TO_GREEN, PenaltyType.OB, strokeCount) },
-                    onRemove = { onRemovePenalty(ShotPhase.TO_GREEN, PenaltyType.OB) },
-                )
-                Spacer(Modifier.width(20.dp))
+            if (viewModel.isReview) {
+                // 완료된 라운드는 홀 정보를 더 이상 고칠 수 없으니 입력 UI 대신 기록된
+                // 값만 읽기 전용으로 보여준다.
+                Text("그린까지 타수: ${viewModel.strokesToGreen}")
+                Spacer(Modifier.height(4.dp))
+                Text("OB ${obToGreenCount}회 · 해저드 ${hazardToGreenCount}회")
+                Spacer(Modifier.height(4.dp))
+                Text("숏게임+퍼팅: ${viewModel.strokesGreenToHoleOut}")
+            } else {
                 StrokeStepper(
-                    label = "해저드",
-                    value = hazardToGreenCount,
-                    buttonColor = PENALTY_HAZARD_COLOR,
-                    compact = true,
+                    label = "그린까지 타수",
+                    value = viewModel.strokesToGreen,
                     onValueChange = { newValue ->
-                        if (newValue > hazardToGreenCount) {
-                            onAddPenalty(ShotPhase.TO_GREEN, PenaltyType.HAZARD, 1)
-                        } else {
-                            onRemovePenalty(ShotPhase.TO_GREEN, PenaltyType.HAZARD)
-                        }
+                        val old = viewModel.strokesToGreen
+                        onStepperChange(ShotPhase.TO_GREEN, old, newValue) { viewModel.strokesToGreen = it }
+                    },
+                )
+                Spacer(Modifier.height(4.dp))
+                Row {
+                    PenaltyStepper(
+                        label = "OB",
+                        value = obToGreenCount,
+                        buttonColor = PENALTY_OB_COLOR,
+                        addAmounts = listOf(1, 2),
+                        canRemove = obToGreenCount > 0,
+                        onAdd = { strokeCount -> onAddPenalty(ShotPhase.TO_GREEN, PenaltyType.OB, strokeCount) },
+                        onRemove = { onRemovePenalty(ShotPhase.TO_GREEN, PenaltyType.OB) },
+                    )
+                    Spacer(Modifier.width(20.dp))
+                    StrokeStepper(
+                        label = "해저드",
+                        value = hazardToGreenCount,
+                        buttonColor = PENALTY_HAZARD_COLOR,
+                        compact = true,
+                        onValueChange = { newValue ->
+                            if (newValue > hazardToGreenCount) {
+                                onAddPenalty(ShotPhase.TO_GREEN, PenaltyType.HAZARD, 1)
+                            } else {
+                                onRemovePenalty(ShotPhase.TO_GREEN, PenaltyType.HAZARD)
+                            }
+                        },
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                StrokeStepper(
+                    label = "숏게임+퍼팅",
+                    value = viewModel.strokesGreenToHoleOut,
+                    onValueChange = { newValue ->
+                        val old = viewModel.strokesGreenToHoleOut
+                        onStepperChange(ShotPhase.SHORT_GAME, old, newValue) { viewModel.strokesGreenToHoleOut = it }
                     },
                 )
             }
-            Spacer(Modifier.height(16.dp))
-            StrokeStepper(
-                label = "숏게임+퍼팅",
-                value = viewModel.strokesGreenToHoleOut,
-                onValueChange = { newValue ->
-                    val old = viewModel.strokesGreenToHoleOut
-                    onStepperChange(ShotPhase.SHORT_GAME, old, newValue) { viewModel.strokesGreenToHoleOut = it }
-                },
-            )
             Spacer(Modifier.height(24.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Button(
@@ -493,9 +504,26 @@ fun RoundPlayScreen(
                 ) { Text("이전 홀") }
                 if (holeCount == 0 || viewModel.currentHoleNumber < holeCount) {
                     Button(onClick = { viewModel.goToHole(viewModel.currentHoleNumber + 1) }) { Text("다음 홀") }
-                } else {
-                    Button(onClick = { viewModel.finishRound(onFinished) }) { Text("완료") }
+                } else if (!viewModel.isReview) {
+                    // 이미 완료된 라운드를 리뷰 중이면 다시 완료할 이유가 없으니 버튼을 안 보여준다.
+                    Button(onClick = { showFinishConfirm = true }) { Text("완료") }
                 }
+            }
+            if (showFinishConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showFinishConfirm = false },
+                    title = { Text("라운드를 완료할까요?") },
+                    text = { Text("완료하면 홀 정보를 더 이상 수정할 수 없습니다.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showFinishConfirm = false
+                            viewModel.finishRound(onFinished)
+                        }) { Text("완료") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showFinishConfirm = false }) { Text("취소") }
+                    },
+                )
             }
         }
     }

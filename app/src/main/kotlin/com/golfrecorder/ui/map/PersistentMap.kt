@@ -244,12 +244,15 @@ fun PersistentCourseMap(state: MapSlotState) {
     // 사용자가 움직여 둔 지도를 다시 끌어오지 않는다. 라운드 진행 중엔 현재 위치를
     // 그린보다 우선해야 실제로 서 있는 곳이 보인다(안 그러면 홀을 오갈 때마다 "위치
     // 조정"으로 맞춰둔 화면이 그린 중심으로 튕겨나간다) — 반대로 이미 끝난 라운드를
-    // 리뷰/수정할 때는 리뷰하는 사람의 GPS 위치가 그 홀과 무관하므로 그린을 우선한다.
+    // 리뷰할 때는 리뷰하는 사람의 GPS 위치가 그 홀과 무관하므로 절대 현재 위치를
+    // 쓰지 않는다. 그린이 없으면(그 홀에서 그린을 지정한 적이 없는 경우) 그 대신
+    // 라운딩 중 기록된 첫 샷 위치로 대체한다 — 아예 못 찾는 것보다 낫다.
     val cameraKey = request?.cameraKey
     val center = if (request?.preferCurrentLocation == true) {
         request.currentLocation ?: request.greenLocation
     } else {
-        request?.greenLocation ?: request?.currentLocation
+        request?.greenLocation
+            ?: request?.shots?.firstOrNull()?.let { AppLatLng(it.lat, it.lng) }
     }
     LaunchedEffect(kakaoMapState.value, cameraKey, center) {
         val map = kakaoMapState.value ?: return@LaunchedEffect

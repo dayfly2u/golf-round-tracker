@@ -134,6 +134,7 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
                     screen.roundId,
                     screen.courseId,
                     screen.holeNumber,
+                    screen.isReview,
                 ),
                 key = "round-play-${System.identityHashCode(screen)}",
             )
@@ -168,8 +169,11 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
                 onEditHole = { holeNumber ->
                     // 코스가 삭제된 라운드는 화면에서 이미 이 콜백을 못 누르게 막아뒀지만,
                     // courseId가 null이면 어차피 홀 정보를 불러올 수 없으니 한 번 더 막는다.
+                    // 리뷰 모드 여부는 "완료" 버튼을 눌렀는지(finishedAt)로 판단한다 — 아직
+                    // 안 끝난 라운드는 결과 화면에서 홀을 눌러도 이어서 플레이하는 것이므로
+                    // 라이브 모드(위치 조정 등)를 그대로 써야 한다.
                     screen.courseId?.let { courseId ->
-                        push(Screen.RoundPlay(screen.roundId, courseId, holeNumber))
+                        push(Screen.RoundPlay(screen.roundId, courseId, holeNumber, isReview = vm.isFinished))
                     }
                 },
                 onHome = { goHome() },
