@@ -1,5 +1,6 @@
 package com.golfrecorder.ui.history
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -24,7 +26,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -68,6 +72,16 @@ private fun formatRoundPeriod(playedAt: Long, finishedAt: Long?): String {
     val start = timeFormat.format(Date(playedAt))
     val end = finishedAt?.let { timeFormat.format(Date(it)) }
     return if (end != null) "$date $start~$end" else "$date $start~"
+}
+
+private val STROKE_LIGHT_RED = Color(0xFFFFCDD2)
+private val STROKE_LIGHT_GREEN = Color(0xFFC8E6C9)
+
+private fun strokeScoreColor(strokes: Int): Color? = when {
+    strokes in 80..89 -> STROKE_LIGHT_RED
+    strokes in 90..94 -> STROKE_LIGHT_GREEN
+    strokes >= 100 -> STROKE_LIGHT_RED
+    else -> null
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -134,8 +148,9 @@ fun RoundHistoryScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { onRoundClick(round) }.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row {
                             Text(round.courseName, fontWeight = FontWeight.Bold)
                             if (round.courseId == null) {
@@ -147,7 +162,7 @@ fun RoundHistoryScreen(
                             }
                         }
                         Text(
-                            "${formatRoundPeriod(round.playedAt, round.finishedAt)} · 총 ${round.totalStrokes}타",
+                            formatRoundPeriod(round.playedAt, round.finishedAt),
                             style = MaterialTheme.typography.bodySmall,
                         )
                         val infoLine = listOfNotNull(
@@ -158,6 +173,18 @@ fun RoundHistoryScreen(
                             Text(infoLine, style = MaterialTheme.typography.bodySmall)
                         }
                     }
+                    val backgroundColor = strokeScoreColor(round.totalStrokes)
+                    Text(
+                        "${round.totalStrokes}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = if (backgroundColor != null) {
+                            Modifier.background(backgroundColor, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        } else {
+                            Modifier
+                        },
+                    )
                     TextButton(onClick = { roundPendingDelete = round }) { Text("삭제") }
                 }
                 HorizontalDivider()
