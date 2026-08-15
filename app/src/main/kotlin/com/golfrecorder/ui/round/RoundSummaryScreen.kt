@@ -161,7 +161,12 @@ fun RoundSummaryScreen(
     val holeResults by viewModel.holeResults.collectAsStateWithLifecycle()
     val courseName by viewModel.courseName.collectAsStateWithLifecycle()
     val totalStrokes = holeResults.sumOf { it.totalStrokes }
+    val totalScoreToPar = holeResults.sumOf { it.scoreToPar }
     val girCount = holeResults.count { it.isGreenInRegulation }
+    val frontNineStrokes = holeResults.take(9).sumOf { it.totalStrokes }
+    val frontNineScoreToPar = holeResults.take(9).sumOf { it.scoreToPar }
+    val backNineStrokes = holeResults.drop(9).sumOf { it.totalStrokes }
+    val backNineScoreToPar = holeResults.drop(9).sumOf { it.scoreToPar }
 
     Scaffold(
         topBar = {
@@ -192,22 +197,48 @@ fun RoundSummaryScreen(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("총 ${totalStrokes}타", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "총 ${totalStrokes}타 (${formatToPar(totalScoreToPar)})",
+                    style = MaterialTheme.typography.titleLarge,
+                )
                 Text("GIR ${girCount}/${holeResults.size}", style = MaterialTheme.typography.titleMedium)
             }
             HorizontalDivider()
             LazyColumn(modifier = Modifier.weight(1f)) {
                 itemsIndexed(holeResults, key = { _, hole -> hole.holeNumber }) { index, hole ->
+                    if (index == 9) {
+                        // 전반 마지막 홀과 "후반" 구분줄이 붙어서 눈에 잘 안 띄길래
+                        // 얇은 흰 칸으로 한 번 끊어준다.
+                        Spacer(
+                            modifier = Modifier.fillMaxWidth()
+                                .height(18.dp)
+                                .background(Color.White),
+                        )
+                    }
                     if (index == 0 || index == 9) {
-                        Text(
-                            if (index == 0) "전반" else "후반",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
+                        Row(
                             modifier = Modifier.fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
-                        )
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                if (index == 0) "전반" else "후반",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                if (index == 0) {
+                                    "${frontNineStrokes}타 (${formatToPar(frontNineScoreToPar)})"
+                                } else {
+                                    "${backNineStrokes}타 (${formatToPar(backNineScoreToPar)})"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                     val textColor = scoreRowTextColor(hole.scoreToPar)
                     Row(
