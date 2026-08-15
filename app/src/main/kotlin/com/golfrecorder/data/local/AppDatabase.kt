@@ -45,5 +45,14 @@ abstract class AppDatabase : RoomDatabase() {
                     .build()
                     .also { instance = it }
             }
+
+        /** 백업/복원 시 DB 파일을 직접 다루기 전에 열려 있는 연결을 닫는다 —
+         * 다음 [getInstance] 호출에서 새로 열린다. */
+        fun closeInstance() {
+            synchronized(this) {
+                instance?.close()
+                instance = null
+            }
+        }
     }
 }
