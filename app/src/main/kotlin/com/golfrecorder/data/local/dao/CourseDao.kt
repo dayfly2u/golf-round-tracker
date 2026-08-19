@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import com.golfrecorder.data.local.entity.CourseEntity
 import com.golfrecorder.data.local.entity.HoleEntity
 import com.golfrecorder.data.local.relation.CourseWithHoles
@@ -68,8 +69,14 @@ interface CourseDao {
     @Query("UPDATE holes SET greenLat = NULL, greenLng = NULL WHERE id = :holeId")
     suspend fun clearGreenLocation(holeId: Long)
 
-    @Query("SELECT * FROM courses ORDER BY name ASC")
+    @Query("SELECT * FROM courses ORDER BY sortOrder ASC, id ASC")
     fun getCourses(): Flow<List<CourseEntity>>
+
+    @Update
+    suspend fun updateAll(courses: List<CourseEntity>)
+
+    @Query("SELECT COALESCE(MAX(sortOrder), -1) FROM courses")
+    suspend fun getMaxSortOrder(): Int
 
     @Transaction
     @Query("SELECT * FROM courses WHERE id = :courseId")

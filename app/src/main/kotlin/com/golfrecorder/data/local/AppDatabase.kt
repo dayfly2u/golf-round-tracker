@@ -24,7 +24,7 @@ import com.golfrecorder.data.local.entity.ShotEntity
         ShotEntity::class,
         PenaltyEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -41,7 +41,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(context, AppDatabase::class.java, "golf_recorder.db")
-                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .addMigrations(MIGRATION_11_12)
                     .build()
                     .also { instance = it }
             }

@@ -12,8 +12,15 @@ class CourseRepository(private val courseDao: CourseDao) {
     fun getCourseWithHoles(courseId: Long): Flow<CourseWithHoles?> =
         courseDao.getCourseWithHoles(courseId)
 
-    suspend fun createCourse(name: String, holePars: List<Int>): Long =
-        courseDao.insertCourseWithHoles(CourseEntity(name = name, holeCount = holePars.size), holePars)
+    suspend fun createCourse(name: String, holePars: List<Int>): Long {
+        val nextSortOrder = courseDao.getMaxSortOrder() + 1
+        val course = CourseEntity(name = name, holeCount = holePars.size, sortOrder = nextSortOrder)
+        return courseDao.insertCourseWithHoles(course, holePars)
+    }
+
+    /** [orderedCourses]가 화면에 보여줄 새 순서 — 각 항목의 sortOrder를 그 위치(index)로 다시 매겨서 저장한다. */
+    suspend fun reorder(orderedCourses: List<CourseEntity>) =
+        courseDao.updateAll(orderedCourses.mapIndexed { index, course -> course.copy(sortOrder = index) })
 
     suspend fun updateHolePar(holeId: Long, par: Int) =
         courseDao.updateHolePar(holeId, par)

@@ -10,10 +10,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,9 @@ import androidx.lifecycle.viewModelScope
 import com.golfrecorder.data.local.entity.CourseEntity
 import com.golfrecorder.data.repository.CourseRepository
 import com.golfrecorder.data.repository.RoundRepository
+import com.golfrecorder.ui.common.dragElevation
+import com.golfrecorder.ui.common.dragHandle
+import com.golfrecorder.ui.common.rememberDragDropListState
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -50,6 +54,10 @@ class CourseManageViewModel(
 
     fun delete(courseId: Long) {
         viewModelScope.launch { courseRepository.deleteCourse(courseId) }
+    }
+
+    fun reorder(orderedCourses: List<CourseEntity>) {
+        viewModelScope.launch { courseRepository.reorder(orderedCourses) }
     }
 
     /**
@@ -92,6 +100,20 @@ fun CourseManageScreen(
     var courseBlockedFromDelete by remember { mutableStateOf<Pair<CourseEntity, Int>?>(null) }
     var expandedCourseIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
+    var displayCourses by remember { mutableStateOf(courses) }
+    val listState = rememberLazyListState()
+    val dragState = rememberDragDropListState(
+        listState = listState,
+        itemCount = { displayCourses.size },
+        onMove = { from, to ->
+            displayCourses = displayCourses.toMutableList().apply { add(to, removeAt(from)) }
+        },
+        onReorderFinished = { viewModel.reorder(displayCourses) },
+    )
+    LaunchedEffect(courses) {
+        if (dragState.draggingItemIndex == null) displayCourses = courses
+    }
+
     coursePendingDelete?.let { course ->
         AlertDialog(
             onDismissRequest = { coursePendingDelete = null },
@@ -130,13 +152,13 @@ fun CourseManageScreen(
             TopAppBar(
                 title = { Text("코스 관리") },
                 navigationIcon = { TextButton(onClick = onBack) { Text("< 뒤로") } },
+                actions = {
+                    TextButton(onClick = onAddCourse) { Text("새 코스 추가") }
+                },
             )
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = onAddCourse) { Text("새 코스 추가!") }
-        },
     ) { padding ->
-        if (courses.isEmpty()) {
+        if (displayCourses.isEmpty()) {
             Text(
                 "등록된 코스가 없습니다. \"새 코스 추가!\" 버튼을 눌러 추가하세요.",
                 modifier = Modifier.padding(padding).padding(16.dp),
@@ -145,16 +167,18 @@ fun CourseManageScreen(
         }
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             Text(
-                "코스 상세 리뷰를 보시려면 코스 이름을 클릭하세요.",
+                "코스 상세 리뷰를 보시려면 코스 이름을 클릭하세요. 손잡이(≡)를 1초간 꾹 눌렀다가 " +
+                    "위아래로 드래그하면 순서를 바꿀 수 있어요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(courses, key = { it.id }) { course ->
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                itemsIndexed(displayCourses, key = { _, course -> course.id }) { index, course ->
                     val expanded = course.id in expandedCourseIds
                     Column(
                         modifier = Modifier.fillMaxWidth()
+                            .dragElevation(index, dragState)
                             .clickable {
                                 expandedCourseIds = if (expanded) {
                                     expandedCourseIds - course.id
@@ -168,37 +192,45 @@ fun CourseManageScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row {
-                                    Text(course.name, fontWeight = FontWeight.Bold)
-                                    if (course.rating != null) {
+                            Row(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "≡",
+                                    modifier = Modifier.dragHandle(index, dragState).padding(end = 12.dp),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                                Column {
+                                    Row {
+                                        Text(course.name, fontWeight = FontWeight.Bold)
+                                        if (course.rating != null) {
+                                            Text(
+                                                "  ★ ${"%.1f".format(course.rating)}",
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                        }
+                                        if (course.difficulty != null) {
+                                            Text(
+                                                "  ★${course.difficulty}",
+                                                color = Color.Red,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                        }
+                                    }
+                                    val infoLine = listOfNotNull(
+                                        course.region?.takeIf { it.isNotBlank() },
+                                        course.distance?.takeIf { it.isNotBlank() },
+                                        course.travelTime?.takeIf { it.isNotBlank() },
+                                    ).joinToString(" | ")
+                                    if (infoLine.isNotBlank()) {
+                                        Text(infoLine, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    if (!course.oneLineReview.isNullOrBlank()) {
                                         Text(
-                                            "  ★ ${"%.1f".format(course.rating)}",
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold,
+                                            course.oneLineReview.chunked(30).joinToString("\n"),
+                                            style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
-                                    if (course.difficulty != null) {
-                                        Text(
-                                            "  ★${course.difficulty}",
-                                            color = Color.Red,
-                                            fontWeight = FontWeight.Bold,
-                                        )
-                                    }
-                                }
-                                val infoLine = listOfNotNull(
-                                    course.region?.takeIf { it.isNotBlank() },
-                                    course.distance?.takeIf { it.isNotBlank() },
-                                    course.travelTime?.takeIf { it.isNotBlank() },
-                                ).joinToString(" | ")
-                                if (infoLine.isNotBlank()) {
-                                    Text(infoLine, style = MaterialTheme.typography.bodySmall)
-                                }
-                                if (!course.oneLineReview.isNullOrBlank()) {
-                                    Text(
-                                        course.oneLineReview.chunked(30).joinToString("\n"),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
                                 }
                             }
                             Row {
