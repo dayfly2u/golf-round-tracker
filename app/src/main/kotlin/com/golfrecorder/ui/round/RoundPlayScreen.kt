@@ -191,7 +191,7 @@ class RoundPlayViewModel(
      * 표시할 위치만 있을 때 추가로 저장한다 — 벌타를 놓치는 것이 위치를 못 찍는 것보다
      * 훨씬 치명적인 실수라서다.
      */
-    fun addPenalty(phase: ShotPhase, type: PenaltyType, strokeCount: Int, lat: Double?, lng: Double?) {
+    fun addPenalty(holeNumber: Int, phase: ShotPhase, type: PenaltyType, strokeCount: Int, lat: Double?, lng: Double?) {
         val newValue = when (phase) {
             ShotPhase.TO_GREEN -> { strokesToGreen += strokeCount; strokesToGreen }
             ShotPhase.SHORT_GAME -> { strokesGreenToHoleOut += strokeCount; strokesGreenToHoleOut }
@@ -199,14 +199,14 @@ class RoundPlayViewModel(
         if (lat != null && lng != null) {
             viewModelScope.launch {
                 penaltyRepository.addPenalty(
-                    roundId, currentHoleNumber, phase, type, newValue, strokeCount, lat, lng
+                    roundId, holeNumber, phase, type, newValue, strokeCount, lat, lng
                 )
             }
         }
     }
 
     /** 가장 최근에 추가한 이 종류의 벌타 1건을 되돌린다 — 그 건이 실제로 더한 타수만큼 뺀다. */
-    fun removeLastPenalty(phase: ShotPhase, type: PenaltyType) {
+    fun removeLastPenalty(holeNumber: Int, phase: ShotPhase, type: PenaltyType) {
         val last = penaltiesFlow.value
             .filter { it.phase == phase.name && it.type == type.name }
             .maxByOrNull { it.penaltyIndex }
@@ -216,7 +216,7 @@ class RoundPlayViewModel(
             ShotPhase.SHORT_GAME -> strokesGreenToHoleOut -= last.strokeCount
         }
         viewModelScope.launch {
-            penaltyRepository.removePenalty(roundId, currentHoleNumber, phase, type, last.penaltyIndex)
+            penaltyRepository.removePenalty(roundId, holeNumber, phase, type, last.penaltyIndex)
         }
     }
 
@@ -338,16 +338,25 @@ fun RoundPlayScreen(
     }
 
     fun onAddPenalty(phase: ShotPhase, type: PenaltyType, strokeCount: Int) {
+        // 홀 전환 경합을 피하려고 버튼 누른 시점의 홀 번호를 미리 캡처한다(onStepperChange와 동일 이유).
+        val holeNumber = viewModel.currentHoleNumber
+        // OB/해저드 위치는 그 순간의 GPS가 아니라 그 벌타를 유발한 직전 샷의 위치를 그대로
+        // 쓴다 — 공을 못 찾아 헤매다 애매한 곳에서 벌타를 선언하는 경우가 많아서, 그 순간의
+        // 현재 위치보다 "그 샷을 친 지점"이 훨씬 안정적이고 재현 가능한 기준점이다.
+        val lastShotLocation = shots.filter { it.phase == phase.name }
+            .maxByOrNull { it.shotIndex }
+            ?.let { AppLatLng(it.lat, it.lng) }
         scope.launch {
             shotMutex.withLock {
-                val loc = if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
-                viewModel.addPenalty(phase, type, strokeCount, loc?.lat, loc?.lng)
+                val loc = lastShotLocation
+                    ?: if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
+                viewModel.addPenalty(holeNumber, phase, type, strokeCount, loc?.lat, loc?.lng)
             }
         }
     }
 
     fun onRemovePenalty(phase: ShotPhase, type: PenaltyType) {
-        viewModel.removeLastPenalty(phase, type)
+        viewModel.removeLastPenalty(viewModel.currentHoleNumber, phase, type)
     }
 
     Scaffold(

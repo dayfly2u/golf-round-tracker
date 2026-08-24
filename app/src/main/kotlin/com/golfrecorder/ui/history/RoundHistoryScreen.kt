@@ -58,10 +58,6 @@ import java.util.Locale
 class RoundHistoryViewModel(private val roundRepository: RoundRepository) : ViewModel() {
     val rounds: StateFlow<List<RoundSummary>> = roundRepository.getRoundSummaries()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun delete(roundId: Long) {
-        viewModelScope.launch { roundRepository.deleteRound(roundId) }
-    }
 }
 
 class RoundHistoryViewModelFactory(
@@ -76,11 +72,19 @@ private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
 private val timeFormat = SimpleDateFormat("HH:mm", Locale.KOREA)
 private val priceFormat = NumberFormat.getNumberInstance(Locale.KOREA)
 
+private fun formatDuration(playedAt: Long, finishedAt: Long): String {
+    val totalMinutes = (finishedAt - playedAt) / 60_000
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return "${hours}hr ${minutes}m"
+}
+
 private fun formatRoundPeriod(playedAt: Long, finishedAt: Long?): String {
     val date = dateFormat.format(Date(playedAt))
     val start = timeFormat.format(Date(playedAt))
-    val end = finishedAt?.let { timeFormat.format(Date(it)) }
-    return if (end != null) "$date $start~$end" else "$date $start~"
+    if (finishedAt == null) return "$date $start~"
+    val end = timeFormat.format(Date(finishedAt))
+    return "$date $start~$end (${formatDuration(playedAt, finishedAt)})"
 }
 
 private val STROKE_LIGHT_BLUE = Color(0xFFBBDEFB)
@@ -103,7 +107,6 @@ fun RoundHistoryScreen(
     onRoundClick: (RoundSummary) -> Unit,
 ) {
     val rounds by viewModel.rounds.collectAsStateWithLifecycle()
-    var roundPendingDelete by remember { mutableStateOf<RoundSummary?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -151,28 +154,6 @@ fun RoundHistoryScreen(
             },
             dismissButton = {
                 TextButton(onClick = { restorePendingUri = null }) { Text("취소") }
-            },
-        )
-    }
-
-    roundPendingDelete?.let { round ->
-        AlertDialog(
-            onDismissRequest = { roundPendingDelete = null },
-            title = { Text("라운드를 삭제할까요?") },
-            text = {
-                Text(
-                    "${round.courseName} · ${formatRoundPeriod(round.playedAt, round.finishedAt)} 기록을 " +
-                        "삭제하면 되돌릴 수 없습니다."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.delete(round.roundId)
-                    roundPendingDelete = null
-                }) { Text("삭제") }
-            },
-            dismissButton = {
-                TextButton(onClick = { roundPendingDelete = null }) { Text("취소") }
             },
         )
     }
@@ -250,14 +231,14 @@ fun RoundHistoryScreen(
                         "${round.totalStrokes}",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        modifier = if (backgroundColor != null) {
-                            Modifier.background(backgroundColor, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        } else {
-                            Modifier
-                        },
+                        modifier = (
+                            if (backgroundColor != null) {
+                                Modifier.background(backgroundColor, RoundedCornerShape(8.dp))
+                            } else {
+                                Modifier
+                            }
+                        ).padding(horizontal = 8.dp, vertical = 2.dp),
                     )
-                    TextButton(onClick = { roundPendingDelete = round }) { Text("삭제") }
                 }
                 HorizontalDivider()
             }

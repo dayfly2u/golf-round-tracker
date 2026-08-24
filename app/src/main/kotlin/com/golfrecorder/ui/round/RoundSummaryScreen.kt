@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +25,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +53,7 @@ import kotlinx.coroutines.launch
 class RoundSummaryViewModel(
     private val roundRepository: RoundRepository,
     courseRepository: CourseRepository,
-    private val roundId: Long,
+    val roundId: Long,
     /** null이면 이 라운드를 기록한 코스가 이미 삭제된 것 — 홀 수정은 코스의 그린 위치
      * 등 홀 정보가 필요해서 코스가 남아있을 때만 가능하다. */
     val courseId: Long?,
@@ -78,6 +79,13 @@ class RoundSummaryViewModel(
                 companions = round.round.companions.orEmpty()
                 review = round.round.review.orEmpty()
             }
+        }
+    }
+
+    fun delete(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            roundRepository.deleteRound(roundId)
+            onDeleted()
         }
     }
 
@@ -160,6 +168,7 @@ fun RoundSummaryScreen(
 ) {
     val holeResults by viewModel.holeResults.collectAsStateWithLifecycle()
     val courseName by viewModel.courseName.collectAsStateWithLifecycle()
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     val totalStrokes = holeResults.sumOf { it.totalStrokes }
     val totalScoreToPar = holeResults.sumOf { it.scoreToPar }
     val girCount = holeResults.count { it.isGreenInRegulation }
@@ -167,6 +176,23 @@ fun RoundSummaryScreen(
     val frontNineScoreToPar = holeResults.take(9).sumOf { it.scoreToPar }
     val backNineStrokes = holeResults.drop(9).sumOf { it.totalStrokes }
     val backNineScoreToPar = holeResults.drop(9).sumOf { it.scoreToPar }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("라운드를 삭제할까요?") },
+            text = { Text("삭제하면 되돌릴 수 없습니다.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    viewModel.delete(onHome)
+                }) { Text("삭제") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("취소") }
+            },
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -183,13 +209,13 @@ fun RoundSummaryScreen(
                         }
                     }
                 },
+                navigationIcon = {
+                    TextButton(onClick = onHome) { Text("< 뒤로") }
+                },
+                actions = {
+                    TextButton(onClick = { showDeleteConfirm = true }) { Text("삭제") }
+                },
             )
-        },
-        bottomBar = {
-            Button(
-                onClick = onHome,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-            ) { Text("홈으로") }
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
