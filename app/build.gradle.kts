@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 val localProperties = Properties().apply {
@@ -20,12 +21,17 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 4
-        versionName = "0.4.2"
+        versionName = "0.4.3"
 
         buildConfigField(
             "String",
             "KAKAO_NATIVE_APP_KEY",
             "\"${localProperties.getProperty("kakao.native.app.key", "")}\"",
+        )
+        buildConfigField(
+            "String",
+            "YOUTUBE_API_KEY",
+            "\"${localProperties.getProperty("youtube.api.key", "")}\"",
         )
     }
 
@@ -68,6 +74,11 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kakao.maps.sdk)
     implementation(libs.play.services.location)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.retrofit.core)
+    implementation(libs.retrofit.kotlinx.serialization.converter)
+    implementation(libs.okhttp.core)
+    implementation(libs.coil.compose)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit)
 }

@@ -5,10 +5,12 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.golfrecorder.data.local.dao.CourseDao
+import com.golfrecorder.data.local.dao.CourseYoutubeLinkDao
 import com.golfrecorder.data.local.dao.PenaltyDao
 import com.golfrecorder.data.local.dao.RoundDao
 import com.golfrecorder.data.local.dao.ShotDao
 import com.golfrecorder.data.local.entity.CourseEntity
+import com.golfrecorder.data.local.entity.CourseYoutubeLinkEntity
 import com.golfrecorder.data.local.entity.HoleEntity
 import com.golfrecorder.data.local.entity.HoleRecordEntity
 import com.golfrecorder.data.local.entity.PenaltyEntity
@@ -23,8 +25,9 @@ import com.golfrecorder.data.local.entity.ShotEntity
         HoleRecordEntity::class,
         ShotEntity::class,
         PenaltyEntity::class,
+        CourseYoutubeLinkEntity::class,
     ],
-    version = 12,
+    version = 14,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,6 +36,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun roundDao(): RoundDao
     abstract fun shotDao(): ShotDao
     abstract fun penaltyDao(): PenaltyDao
+    abstract fun courseYoutubeLinkDao(): CourseYoutubeLinkDao
 
     companion object {
         @Volatile
@@ -41,7 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(context, AppDatabase::class.java, "golf_recorder.db")
-                    .addMigrations(MIGRATION_11_12)
+                    .addMigrations(MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                     .build()
                     .also { instance = it }
             }

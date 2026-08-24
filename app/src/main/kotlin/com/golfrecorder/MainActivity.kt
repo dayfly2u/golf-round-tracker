@@ -103,7 +103,11 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
 
         is Screen.CourseManage -> {
             val vm = viewModel<CourseManageViewModel>(
-                factory = CourseManageViewModelFactory(container.courseRepository, container.roundRepository),
+                factory = CourseManageViewModelFactory(
+                    container.courseRepository,
+                    container.roundRepository,
+                    container.courseYoutubeLinkRepository,
+                ),
             )
             CourseManageScreen(
                 viewModel = vm,
@@ -115,7 +119,11 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
 
         is Screen.CourseEdit -> {
             val vm = viewModel<CourseEditViewModel>(
-                factory = CourseEditViewModelFactory(container.courseRepository, screen.courseId),
+                factory = CourseEditViewModelFactory(
+                    container.courseRepository,
+                    container.courseYoutubeLinkRepository,
+                    screen.courseId,
+                ),
                 // 필드값이 아니라 이 push된 Screen 인스턴스의 identity로 키를 잡는다.
                 // courseId가 null인 "추가" 화면은 필드값 기준 키가 항상 동일해서, 키가 없으면
                 // 이전 방문의 ViewModel이 그대로 재사용되는 버그가 생긴다.

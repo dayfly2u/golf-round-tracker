@@ -1,5 +1,7 @@
 package com.golfrecorder.ui.course
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,18 +30,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.golfrecorder.data.local.entity.CourseEntity
+import com.golfrecorder.data.local.entity.CourseYoutubeLinkEntity
 import com.golfrecorder.data.repository.CourseRepository
+import com.golfrecorder.data.repository.CourseYoutubeLinkRepository
 import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.ui.common.dragElevation
 import com.golfrecorder.ui.common.dragHandle
 import com.golfrecorder.ui.common.rememberDragDropListState
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -48,6 +55,7 @@ import kotlinx.coroutines.launch
 class CourseManageViewModel(
     private val courseRepository: CourseRepository,
     private val roundRepository: RoundRepository,
+    private val courseYoutubeLinkRepository: CourseYoutubeLinkRepository,
 ) : ViewModel() {
     val courses: StateFlow<List<CourseEntity>> = courseRepository.getCourses()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -59,6 +67,9 @@ class CourseManageViewModel(
     fun reorder(orderedCourses: List<CourseEntity>) {
         viewModelScope.launch { courseRepository.reorder(orderedCourses) }
     }
+
+    fun getYoutubeLinks(courseId: Long): Flow<List<CourseYoutubeLinkEntity>> =
+        courseYoutubeLinkRepository.getLinks(courseId)
 
     /**
      * 이 코스로 기록된 라운드가 있으면 삭제를 막는다 — 나중에 지도에서 예전 샷
@@ -75,10 +86,11 @@ class CourseManageViewModel(
 class CourseManageViewModelFactory(
     private val courseRepository: CourseRepository,
     private val roundRepository: RoundRepository,
+    private val courseYoutubeLinkRepository: CourseYoutubeLinkRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        CourseManageViewModel(courseRepository, roundRepository) as T
+        CourseManageViewModel(courseRepository, roundRepository, courseYoutubeLinkRepository) as T
 }
 
 @Composable
@@ -99,6 +111,7 @@ fun CourseManageScreen(
     var coursePendingDelete by remember { mutableStateOf<CourseEntity?>(null) }
     var courseBlockedFromDelete by remember { mutableStateOf<Pair<CourseEntity, Int>?>(null) }
     var expandedCourseIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val context = LocalContext.current
 
     var displayCourses by remember { mutableStateOf(courses) }
     val listState = rememberLazyListState()
@@ -270,6 +283,27 @@ fun CourseManageScreen(
                                     }
                                     course.courseInfo?.takeIf { it.isNotBlank() }?.let {
                                         ReviewSection("코스", it)
+                                    }
+                                }
+
+                                val youtubeLinksFlow = remember(course.id) { viewModel.getYoutubeLinks(course.id) }
+                                val youtubeLinks by youtubeLinksFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+                                if (youtubeLinks.isNotEmpty()) {
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("유튜브 링크", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    youtubeLinks.forEach { link ->
+                                        Text(
+                                            "▶ ${link.title ?: link.url}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.fillMaxWidth()
+                                                .clickable {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
+                                                }
+                                                .padding(vertical = 4.dp),
+                                        )
                                     }
                                 }
                             }

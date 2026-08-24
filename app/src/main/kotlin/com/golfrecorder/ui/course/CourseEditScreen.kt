@@ -1,13 +1,23 @@
 package com.golfrecorder.ui.course
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -21,16 +31,33 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.golfrecorder.data.local.entity.CourseYoutubeLinkEntity
 import com.golfrecorder.data.repository.CourseRepository
+import com.golfrecorder.data.repository.CourseYoutubeLinkRepository
+import com.golfrecorder.data.repository.isValidYoutubeUrl
+import com.golfrecorder.domain.model.YoutubeCategory
+import com.golfrecorder.domain.model.YoutubeSearchResult
+import com.golfrecorder.ui.common.SectionHeader
+import com.golfrecorder.ui.common.VideoThumbnail
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -49,8 +76,52 @@ fun difficultyLabel(level: Int): String = when (level) {
 
 class CourseEditViewModel(
     private val courseRepository: CourseRepository,
-    private val existingCourseId: Long?,
+    private val courseYoutubeLinkRepository: CourseYoutubeLinkRepository,
+    val existingCourseId: Long?,
 ) : ViewModel() {
+    val youtubeLinks: StateFlow<List<CourseYoutubeLinkEntity>> = if (existingCourseId != null) {
+        courseYoutubeLinkRepository.getLinks(existingCourseId)
+    } else {
+        flowOf(emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _youtubeSearchResults = MutableStateFlow<List<YoutubeSearchResult>>(emptyList())
+    val youtubeSearchResults: StateFlow<List<YoutubeSearchResult>> = _youtubeSearchResults
+
+    private val _isSearchingYoutube = MutableStateFlow(false)
+    val isSearchingYoutube: StateFlow<Boolean> = _isSearchingYoutube
+
+    fun searchYoutube(query: String) {
+        if (query.isBlank()) return
+        viewModelScope.launch {
+            _isSearchingYoutube.value = true
+            _youtubeSearchResults.value = courseYoutubeLinkRepository.search(query)
+            _isSearchingYoutube.value = false
+        }
+    }
+
+    fun clearYoutubeSearch() {
+        _youtubeSearchResults.value = emptyList()
+    }
+
+    fun addYoutubeLink(url: String, category: YoutubeCategory, selectedResult: YoutubeSearchResult?) {
+        val courseId = existingCourseId ?: return
+        viewModelScope.launch {
+            courseYoutubeLinkRepository.addLink(
+                courseId = courseId,
+                url = url,
+                category = category,
+                title = selectedResult?.title,
+                thumbnailUrl = selectedResult?.thumbnailUrl,
+                channelTitle = selectedResult?.channelTitle,
+            )
+        }
+    }
+
+    fun deleteYoutubeLink(linkId: Long) {
+        viewModelScope.launch { courseYoutubeLinkRepository.deleteLink(linkId) }
+    }
+
     var name by mutableStateOf("")
     var pars by mutableStateOf(List(DEFAULT_HOLE_COUNT) { DEFAULT_PAR })
         private set
@@ -136,11 +207,12 @@ class CourseEditViewModel(
 
 class CourseEditViewModelFactory(
     private val courseRepository: CourseRepository,
+    private val courseYoutubeLinkRepository: CourseYoutubeLinkRepository,
     private val existingCourseId: Long?,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        CourseEditViewModel(courseRepository, existingCourseId) as T
+        CourseEditViewModel(courseRepository, courseYoutubeLinkRepository, existingCourseId) as T
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -150,6 +222,43 @@ fun CourseEditScreen(
     isNew: Boolean,
     onBack: () -> Unit,
 ) {
+    val youtubeLinks by viewModel.youtubeLinks.collectAsStateWithLifecycle()
+    var showAddLinkDialog by remember { mutableStateOf(false) }
+    var pendingDeleteLink by remember { mutableStateOf<CourseYoutubeLinkEntity?>(null) }
+    val context = LocalContext.current
+
+    pendingDeleteLink?.let { link ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteLink = null },
+            title = { Text("링크를 삭제할까요?") },
+            text = { Text("\"${link.title ?: link.url}\"를 삭제하면 되돌릴 수 없습니다.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.deleteYoutubeLink(link.id); pendingDeleteLink = null }) { Text("삭제") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeleteLink = null }) { Text("취소") } },
+        )
+    }
+
+    if (showAddLinkDialog) {
+        val searchResults by viewModel.youtubeSearchResults.collectAsStateWithLifecycle()
+        val isSearching by viewModel.isSearchingYoutube.collectAsStateWithLifecycle()
+        AddYoutubeLinkDialog(
+            initialQuery = viewModel.name,
+            searchResults = searchResults,
+            isSearching = isSearching,
+            onSearch = viewModel::searchYoutube,
+            onDismiss = {
+                showAddLinkDialog = false
+                viewModel.clearYoutubeSearch()
+            },
+            onConfirm = { url, category, selectedResult ->
+                viewModel.addYoutubeLink(url, category, selectedResult)
+                showAddLinkDialog = false
+                viewModel.clearYoutubeSearch()
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -222,7 +331,7 @@ fun CourseEditScreen(
                 Spacer(Modifier.height(24.dp))
                 HorizontalDivider()
                 Spacer(Modifier.height(16.dp))
-                Text("리뷰 (선택 입력)", fontWeight = FontWeight.Bold)
+                SectionHeader("리뷰 (선택 입력)")
                 Spacer(Modifier.height(8.dp))
                 Text(
                     if (viewModel.rating <= 0f) "총평점: 없음" else "총평점: ${"%.1f".format(viewModel.rating)}",
@@ -302,7 +411,187 @@ fun CourseEditScreen(
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                Spacer(Modifier.height(24.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(16.dp))
+                if (viewModel.existingCourseId == null) {
+                    SectionHeader("유튜브 링크")
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "코스를 저장한 후에 유튜브 링크를 추가할 수 있어요.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SectionHeader("유튜브 링크")
+                        TextButton(onClick = { showAddLinkDialog = true }) { Text("링크 추가") }
+                    }
+                    if (youtubeLinks.isEmpty()) {
+                        Text(
+                            "아직 추가한 링크가 없어요.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                    YoutubeCategory.entries.forEach { category ->
+                        val links = youtubeLinks.filter { it.category == category.name }
+                        if (links.isNotEmpty()) {
+                            Text(category.displayLabel, style = MaterialTheme.typography.labelMedium)
+                            links.forEach { link ->
+                                Box(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .clickable {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))
+                                        }
+                                        .padding(vertical = 6.dp),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(end = 56.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        VideoThumbnail(link.thumbnailUrl)
+                                        Column {
+                                            Text(
+                                                link.title ?: link.url,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            link.channelTitle?.let {
+                                                Text(
+                                                    it,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.outline,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    TextButton(
+                                        onClick = { pendingDeleteLink = link },
+                                        modifier = Modifier.align(Alignment.CenterEnd),
+                                    ) { Text("삭제") }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun AddYoutubeLinkDialog(
+    initialQuery: String,
+    searchResults: List<YoutubeSearchResult>,
+    isSearching: Boolean,
+    onSearch: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: (String, YoutubeCategory, YoutubeSearchResult?) -> Unit,
+) {
+    val context = LocalContext.current
+    var searchQuery by remember { mutableStateOf(initialQuery) }
+    var url by remember { mutableStateOf("") }
+    var selectedResult by remember { mutableStateOf<YoutubeSearchResult?>(null) }
+    var category by remember { mutableStateOf(YoutubeCategory.ROUND) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("유튜브 링크 추가") },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("영상 검색") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    YoutubeCategory.entries.forEach { c ->
+                        FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c.displayLabel) })
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(
+                        onClick = {
+                            val augmentedQuery = listOf(searchQuery.trim(), category.displayLabel)
+                                .filter { it.isNotBlank() }
+                                .joinToString(" ")
+                            onSearch(augmentedQuery)
+                        },
+                        enabled = searchQuery.isNotBlank(),
+                    ) { Text("검색") }
+                }
+                if (isSearching) {
+                    Text("검색 중...", style = MaterialTheme.typography.bodySmall)
+                }
+                searchResults.forEach { result ->
+                    val resultUrl = "https://www.youtube.com/watch?v=${result.videoId}"
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable {
+                                url = resultUrl
+                                selectedResult = result
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(resultUrl)))
+                            }
+                            .background(
+                                if (url == resultUrl) MaterialTheme.colorScheme.primaryContainer else Color.Unspecified,
+                            )
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        VideoThumbnail(result.thumbnailUrl)
+                        Column {
+                            Text(
+                                result.title,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                listOfNotNull(result.channelTitle, result.publishedYear).joinToString(" · "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                    }
+                }
+                if (searchResults.isNotEmpty()) {
+                    Text(
+                        "위 목록에서 선택하거나, 아래에 URL을 직접 입력할 수 있어요.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                }
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = {
+                        url = it
+                        if (selectedResult != null && it != "https://www.youtube.com/watch?v=${selectedResult?.videoId}") {
+                            selectedResult = null
+                        }
+                    },
+                    label = { Text("유튜브 URL") },
+                    isError = url.isNotBlank() && !isValidYoutubeUrl(url),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(url.trim(), category, selectedResult) },
+                enabled = isValidYoutubeUrl(url),
+            ) { Text("추가") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+    )
 }
