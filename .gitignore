@@ -9,3 +9,5 @@
 .cxx/
 app/build/
 app/schemas/
+wear/build/
+/.tmp/

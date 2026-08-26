@@ -45,13 +45,24 @@
 
 지금은 "지금 몇 홀인지"가 `RoundPlayViewModel`의 메모리(`mutableStateOf`)에만 있어서 화면을 벗어나면 사라진다. 이 값을 DB 컬럼으로 옮겨서 폰 화면과 워치 서비스가 동시에 참조하는 단일 소스로 만든다 — 그래야 워치로 홀을 넘긴 뒤 폰을 켜도 정확한 홀이 뜨고, 반대로 폰에서 홀을 넘긴 것도 워치에 반영된다.
 
-타수 자체는 별도 카운터 컬럼이 필요 없다 — 이미 있는 `shots` 테이블에서 `(roundId, holeNumber, phase)`별 행 개수를 세면 되므로, 워치가 보낸 증감 이벤트도 기존 `ShotRepository`로 그대로 처리 가능하다.
+타수 자체는 별도 카운터 컬럼이 필요 없다 — 단, 구현 계획 작성 중 코드를 읽어보니 "행 개수를 센다"는 정확한 표현이 아니어서 바로잡는다. `ShotEntity.shotIndex`와 `PenaltyEntity.penaltyIndex`는 둘 다 "그 이벤트가 일어난 시점의 그 구간 누적 타수"를 그대로 저장한 값이다(`RoundPlayViewModel.addPenalty`가 `penaltyRepository.addPenalty(...)`를 호출할 때 `penaltyIndex` 자리에 갱신된 총 타수 `newValue`를 넘김). 즉 OB/해저드처럼 `shots` 테이블에 행이 안 생기는 이벤트도 `penaltyIndex`에 그 시점 총 타수가 남기 때문에, 특정 홀·구간(phase)의 현재 총 타수는:
+
+```
+currentTotal(phase) = max(
+    shots.filter { it.phase == phase.name }.maxOfOrNull { it.shotIndex } ?: 0,
+    penalties.filter { it.phase == phase.name }.maxOfOrNull { it.penaltyIndex } ?: 0,
+)
+```
+
+로 두 테이블만 보고 정확히 복원된다 — 새 카운터 컬럼이 필요 없다는 원래 결론은 맞고, 공식만 이렇게 바로잡는다. 이 공식은 워치 서비스뿐 아니라 `RoundPlayViewModel` 자신도 써야 한다: 지금은 `strokesToGreen`/`strokesGreenToHoleOut`이 그 화면(ViewModel) 인스턴스가 메모리에서 직접 증감시키는 값이라, 워치가 같은 홀의 타수를 바꿔도 이미 열려 있는 폰 화면에는 반영되지 않는 문제가 있다. 이걸 `shots`/`penalties` Flow에서 위 공식으로 매번 다시 계산하는 파생값으로 바꾸면, 워치가 쓰든 폰이 쓰든 같은 테이블을 보고 항상 같은 숫자가 나온다.
 
 ## 폰 쪽 코드 변경
 
 1. **마이그레이션**: 위 `currentHoleNumber` 컬럼 추가.
-2. **`RoundPlayViewModel` 리팩터링**: `currentHoleNumber`를 로컬 `mutableStateOf`가 아니라 라운드 행의 `currentHoleNumber`를 관찰하는 값으로 바꾸고, `goToHole`은 DB에 write-through 한다.
-3. **`RoundRecordingService`(신규)**: 포그라운드 서비스. `MessageClient` 리스너 등록, 기존 `ShotRepository`/`RoundRepository`/`LocationCapture`를 그대로 재사용해서 증감·홀이동 처리, 처리 후 `DataClient`로 최신 상태 전송, 상시 알림 표시(탭하면 해당 라운드 화면으로 이동).
+2. **`RoundPlayViewModel` 리팩터링**:
+   - `currentHoleNumber`를 로컬 `mutableStateOf`가 아니라 라운드 행의 `currentHoleNumber`를 관찰하는 값으로 바꾸고, `goToHole`은 DB에 write-through 한다.
+   - `strokesToGreen`/`strokesGreenToHoleOut`을 로컬에서 직접 증감시키는 대신, 위 공식으로 `shots`/`penalties` Flow에서 매번 다시 계산하는 파생값으로 바꾼다.
+3. **`RoundRecordingService`(신규)**: 포그라운드 서비스. `MessageClient` 리스너 등록, 기존 `ShotRepository`/`RoundRepository`/`LocationCapture`를 그대로 재사용해서 증감·홀이동 처리(같은 공식으로 현재 타수를 계산), 처리 후 `DataClient`로 최신 상태 전송, 상시 알림 표시(탭하면 해당 라운드 화면으로 이동).
 4. **서비스 시작/종료 트리거**: `CourseSelectViewModel.startRound` 직후 시작, 라운드 완료/취소 시 종료.
 
 ## 워치 앱 (신규 `:wear` Gradle 모듈)
