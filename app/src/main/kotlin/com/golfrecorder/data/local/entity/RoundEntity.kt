@@ -32,4 +32,6 @@ data class RoundEntity(
     val price: Int? = null,
     val companions: String? = null,
     val review: String? = null,
+    /** 워치 연동/화면 재진입 시 "지금 몇 홀인지" 복원용. 라운드 생성 시 1로 시작. */
+    val currentHoleNumber: Int = 1,
 )
