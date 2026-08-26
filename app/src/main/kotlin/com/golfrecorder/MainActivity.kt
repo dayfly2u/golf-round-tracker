@@ -105,7 +105,6 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
             val vm = viewModel<CourseManageViewModel>(
                 factory = CourseManageViewModelFactory(
                     container.courseRepository,
-                    container.roundRepository,
                     container.courseYoutubeLinkRepository,
                 ),
             )
@@ -122,6 +121,7 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
                 factory = CourseEditViewModelFactory(
                     container.courseRepository,
                     container.courseYoutubeLinkRepository,
+                    container.roundRepository,
                     screen.courseId,
                 ),
                 // 필드값이 아니라 이 push된 Screen 인스턴스의 identity로 키를 잡는다.

@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,8 +22,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -163,29 +162,24 @@ fun RoundHistoryScreen(
             TopAppBar(
                 title = { Text("K-Golf") },
                 actions = {
-                    TextButton(onClick = { backupLauncher.launch(BackupManager.backupFileName()) }) {
-                        Text("백업")
-                    }
-                    TextButton(onClick = { restoreLauncher.launch(arrayOf("*/*")) }) {
-                        Text("복원")
-                    }
+                    TextButton(onClick = onStartRound) { Text("새 라운딩 시작!") }
+                    TextButton(onClick = onManageCourses) { Text("코스 관리") }
                 },
             )
         },
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onStartRound,
-                    icon = {},
-                    label = { Text("새 라운딩 시작!") },
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onManageCourses,
-                    icon = {},
-                    label = { Text("코스 관리") },
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextButton(
+                    onClick = { backupLauncher.launch(BackupManager.backupFileName()) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                ) { Text("백업", style = MaterialTheme.typography.bodySmall) }
+                TextButton(
+                    onClick = { restoreLauncher.launch(arrayOf("*/*")) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                ) { Text("복원", style = MaterialTheme.typography.bodySmall) }
             }
         },
     ) { padding ->

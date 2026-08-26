@@ -47,6 +47,7 @@ import androidx.lifecycle.viewModelScope
 import com.golfrecorder.data.local.entity.CourseYoutubeLinkEntity
 import com.golfrecorder.data.repository.CourseRepository
 import com.golfrecorder.data.repository.CourseYoutubeLinkRepository
+import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.data.repository.isValidYoutubeUrl
 import com.golfrecorder.domain.model.YoutubeCategory
 import com.golfrecorder.domain.model.YoutubeSearchResult
@@ -77,8 +78,29 @@ fun difficultyLabel(level: Int): String = when (level) {
 class CourseEditViewModel(
     private val courseRepository: CourseRepository,
     private val courseYoutubeLinkRepository: CourseYoutubeLinkRepository,
+    private val roundRepository: RoundRepository,
     val existingCourseId: Long?,
 ) : ViewModel() {
+    /**
+     * 이 코스로 기록된 라운드가 있으면 삭제를 막는다 — 나중에 지도에서 예전 샷
+     * 위치를 다시 보려면 코스의 홀/그린 정보가 남아있어야 하기 때문이다.
+     * [onResult]에 남은 라운드 개수를 넘긴다(0이면 바로 삭제해도 된다는 뜻).
+     */
+    fun checkDeletable(onResult: (roundCount: Int) -> Unit) {
+        val courseId = existingCourseId ?: return
+        viewModelScope.launch {
+            onResult(roundRepository.countRoundsForCourse(courseId))
+        }
+    }
+
+    fun delete(onDeleted: () -> Unit) {
+        val courseId = existingCourseId ?: return
+        viewModelScope.launch {
+            courseRepository.deleteCourse(courseId)
+            onDeleted()
+        }
+    }
+
     val youtubeLinks: StateFlow<List<CourseYoutubeLinkEntity>> = if (existingCourseId != null) {
         courseYoutubeLinkRepository.getLinks(existingCourseId)
     } else {
@@ -208,11 +230,12 @@ class CourseEditViewModel(
 class CourseEditViewModelFactory(
     private val courseRepository: CourseRepository,
     private val courseYoutubeLinkRepository: CourseYoutubeLinkRepository,
+    private val roundRepository: RoundRepository,
     private val existingCourseId: Long?,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        CourseEditViewModel(courseRepository, courseYoutubeLinkRepository, existingCourseId) as T
+        CourseEditViewModel(courseRepository, courseYoutubeLinkRepository, roundRepository, existingCourseId) as T
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -225,7 +248,42 @@ fun CourseEditScreen(
     val youtubeLinks by viewModel.youtubeLinks.collectAsStateWithLifecycle()
     var showAddLinkDialog by remember { mutableStateOf(false) }
     var pendingDeleteLink by remember { mutableStateOf<CourseYoutubeLinkEntity?>(null) }
+    var pendingDeleteCourse by remember { mutableStateOf(false) }
+    var courseBlockedFromDelete by remember { mutableStateOf<Int?>(null) }
     val context = LocalContext.current
+
+    if (pendingDeleteCourse) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteCourse = false },
+            title = { Text("코스를 삭제할까요?") },
+            text = { Text("\"${viewModel.name}\"을(를) 삭제하면 되돌릴 수 없습니다.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDeleteCourse = false
+                    viewModel.delete(onBack)
+                }) { Text("삭제") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteCourse = false }) { Text("취소") }
+            },
+        )
+    }
+
+    courseBlockedFromDelete?.let { roundCount ->
+        AlertDialog(
+            onDismissRequest = { courseBlockedFromDelete = null },
+            title = { Text("삭제할 수 없습니다") },
+            text = {
+                Text(
+                    "\"${viewModel.name}\"으로 기록된 라운드가 ${roundCount}개 있어 삭제할 수 없습니다. " +
+                        "홈 화면에서 그 라운드들을 먼저 삭제해주세요."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { courseBlockedFromDelete = null }) { Text("확인") }
+            },
+        )
+    }
 
     pendingDeleteLink?.let { link ->
         AlertDialog(
@@ -266,6 +324,19 @@ fun CourseEditScreen(
                 navigationIcon = { TextButton(onClick = onBack) { Text("< 뒤로") } },
                 actions = {
                     TextButton(onClick = { viewModel.save(onBack) }) { Text("저장") }
+                    if (!isNew) {
+                        TextButton(onClick = {
+                            viewModel.checkDeletable { roundCount ->
+                                if (roundCount > 0) {
+                                    courseBlockedFromDelete = roundCount
+                                } else {
+                                    pendingDeleteCourse = true
+                                }
+                            }
+                        }) {
+                            Text("삭제", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 },
             )
         },
