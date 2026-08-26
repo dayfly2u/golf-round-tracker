@@ -5,6 +5,10 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".GolfRecorderApp"
@@ -14,6 +18,10 @@
         android:label="@string/app_name"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
+        <service
+            android:name=".service.RoundRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="location|connectedDevice" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
