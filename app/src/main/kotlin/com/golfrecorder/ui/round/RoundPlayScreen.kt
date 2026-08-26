@@ -48,6 +48,7 @@ import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.data.repository.ShotRepository
 import com.golfrecorder.domain.model.PenaltyType
 import com.golfrecorder.domain.model.ShotPhase
+import com.golfrecorder.domain.model.StrokeCalculator
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.location.LocationCapture
 import com.golfrecorder.ui.common.PenaltyStepper
@@ -106,6 +107,9 @@ class RoundPlayViewModel(
     private var penaltiesCollectJob: Job? = null
 
     init {
+        if (!isReview) {
+            viewModelScope.launch { roundRepository.updateCurrentHoleNumber(roundId, initialHoleNumber) }
+        }
         loadHole(initialHoleNumber)
     }
 
@@ -120,15 +124,18 @@ class RoundPlayViewModel(
             penaltyRepository.getPenalties(roundId, holeNumber).collect { penaltiesFlow.value = it }
         }
         viewModelScope.launch {
-            val existing = roundRepository.getRoundWithHoleRecords(roundId).first()
-                ?.holeRecords?.find { it.holeNumber == holeNumber }
-            strokesToGreen = existing?.strokesToGreen ?: 0
-            strokesGreenToHoleOut = existing?.strokesGreenToHoleOut ?: 0
+            val shots = shotRepository.getShots(roundId, holeNumber).first()
+            val penalties = penaltyRepository.getPenalties(roundId, holeNumber).first()
+            strokesToGreen = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.TO_GREEN)
+            strokesGreenToHoleOut = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.SHORT_GAME)
         }
     }
 
     fun goToHole(holeNumber: Int) {
-        saveCurrentHole { loadHole(holeNumber) }
+        saveCurrentHole {
+            viewModelScope.launch { roundRepository.updateCurrentHoleNumber(roundId, holeNumber) }
+            loadHole(holeNumber)
+        }
     }
 
     fun finishRound(onFinished: () -> Unit) {
