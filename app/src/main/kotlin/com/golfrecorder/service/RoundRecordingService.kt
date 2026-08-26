@@ -25,7 +25,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeoutOrNull
 
 class RoundRecordingService : Service() {
 
@@ -59,8 +61,13 @@ class RoundRecordingService : Service() {
 
     override fun onDestroy() {
         Wearable.getMessageClient(this).removeListener(messageListener)
-        serviceScope.launch {
-            pushState(roundActive = false)
+        // 스코프를 취소하기 전에 "라운드 종료" 상태가 실제로 전송 완료(혹은 타임아웃)되도록
+        // 기다린다 — serviceScope.launch { ... }로 던지고 바로 cancel()하면 코루틴이
+        // 실행되기 전에 취소돼 워치에 마지막 상태가 전달되지 않는 경우가 있었다.
+        runBlocking {
+            withTimeoutOrNull(2000) {
+                pushState(roundActive = false)
+            }
         }
         serviceScope.cancel()
         super.onDestroy()
