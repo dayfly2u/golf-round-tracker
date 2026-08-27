@@ -148,24 +148,6 @@ class RoundPlayViewModel(
         }
     }
 
-    /**
-     * 뒤로가기 시: 아직 한 홀도 저장 안 된(= 코스만 고르고 바로 나가는) 라운드는
-     * 목록에 빈 라운드가 남는 걸 막기 위해 통째로 지운다. 이미 진행된 라운드는
-     * 남겨두고 홀 리스트(라운드 결과) 화면을 보여준다.
-     */
-    fun exitRound(onCancelled: () -> Unit, onHasProgress: () -> Unit) {
-        viewModelScope.launch {
-            val hasProgress = roundRepository.getRoundWithHoleRecords(roundId).first()
-                ?.holeRecords?.isNotEmpty() == true
-            if (hasProgress) {
-                onHasProgress()
-            } else {
-                roundRepository.deleteRound(roundId)
-                onCancelled()
-            }
-        }
-    }
-
     private fun saveCurrentHole(after: () -> Unit) {
         val par = holes.value.find { it.holeNumber == currentHoleNumber }?.par ?: 4
         viewModelScope.launch {
@@ -273,7 +255,6 @@ fun RoundPlayScreen(
     viewModel: RoundPlayViewModel,
     mapSlotState: MapSlotState,
     onFinished: () -> Unit,
-    onCancelled: () -> Unit,
     onShowSummary: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -286,10 +267,10 @@ fun RoundPlayScreen(
         }
     }
 
-    fun handleBack() {
-        viewModel.exitRound(onCancelled = onCancelled, onHasProgress = onShowSummary)
-    }
-    BackHandler { handleBack() }
+    // 코스를 선택한 순간 이미 라운드가 시작된 것으로 취급한다 — 진행된 홀이
+    // 하나도 없어도 뒤로가기로 라운드를 통째로 지우지 않고 라운드 결과(요약)
+    // 화면으로 보낸다. 필요하면 그 화면에서 명시적으로 삭제할 수 있다.
+    BackHandler { onShowSummary() }
 
     val holes by viewModel.holes.collectAsStateWithLifecycle()
     val shots by viewModel.shots.collectAsStateWithLifecycle()
@@ -380,7 +361,7 @@ fun RoundPlayScreen(
         topBar = {
             TopAppBar(
                 title = { Text("${viewModel.currentHoleNumber}홀 (파 $par)") },
-                navigationIcon = { TextButton(onClick = { handleBack() }) { Text("< 뒤로") } },
+                navigationIcon = { TextButton(onClick = { onShowSummary() }) { Text("< 뒤로") } },
             )
         },
     ) { padding ->
