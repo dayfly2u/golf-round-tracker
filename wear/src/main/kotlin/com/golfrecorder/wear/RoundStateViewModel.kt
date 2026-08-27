@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.golfrecorder.wearsync.WearSync
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataItemBuffer
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
@@ -38,8 +39,9 @@ class RoundStateViewModel(application: Application) :
     init {
         dataClient.addListener(this)
         viewModelScope.launch {
+            var items: DataItemBuffer? = null
             try {
-                val items = dataClient.dataItems.await()
+                items = dataClient.dataItems.await()
                 Log.d(TAG, "initial dataItems count=${items.count}")
                 for (item in items) {
                     Log.d(TAG, "initial dataItem uri=${item.uri}")
@@ -47,9 +49,10 @@ class RoundStateViewModel(application: Application) :
                         applyDataMap(DataMapItem.fromDataItem(item).dataMap)
                     }
                 }
-                items.release()
             } catch (e: Exception) {
                 Log.e(TAG, "initial dataItems FAILED", e)
+            } finally {
+                items?.release()
             }
         }
     }
