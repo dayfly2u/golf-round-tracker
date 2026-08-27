@@ -1,6 +1,7 @@
 package com.golfrecorder.wear
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.golfrecorder.wearsync.WearSync
@@ -37,18 +38,26 @@ class RoundStateViewModel(application: Application) :
     init {
         dataClient.addListener(this)
         viewModelScope.launch {
-            val items = dataClient.dataItems.await()
-            for (item in items) {
-                if (item.uri.path == WearSync.STATE_PATH) {
-                    applyDataMap(DataMapItem.fromDataItem(item).dataMap)
+            try {
+                val items = dataClient.dataItems.await()
+                Log.d(TAG, "initial dataItems count=${items.count}")
+                for (item in items) {
+                    Log.d(TAG, "initial dataItem uri=${item.uri}")
+                    if (item.uri.path == WearSync.STATE_PATH) {
+                        applyDataMap(DataMapItem.fromDataItem(item).dataMap)
+                    }
                 }
+                items.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "initial dataItems FAILED", e)
             }
-            items.release()
         }
     }
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
+        Log.d(TAG, "onDataChanged count=${dataEvents.count}")
         for (event in dataEvents) {
+            Log.d(TAG, "onDataChanged event type=${event.type} uri=${event.dataItem.uri}")
             if (event.dataItem.uri.path == WearSync.STATE_PATH) {
                 applyDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
             }
@@ -69,9 +78,15 @@ class RoundStateViewModel(application: Application) :
 
     fun sendAction(action: String) {
         viewModelScope.launch {
-            val nodes = nodeClient.connectedNodes.await()
-            for (node in nodes) {
-                messageClient.sendMessage(node.id, WearSync.ACTION_PATH, action.toByteArray(Charsets.UTF_8)).await()
+            try {
+                val nodes = nodeClient.connectedNodes.await()
+                Log.d(TAG, "sendAction($action) connectedNodes=${nodes.size}: ${nodes.map { it.displayName + "/" + it.id }}")
+                for (node in nodes) {
+                    messageClient.sendMessage(node.id, WearSync.ACTION_PATH, action.toByteArray(Charsets.UTF_8)).await()
+                    Log.d(TAG, "sendAction($action) sent to ${node.id}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "sendAction($action) FAILED", e)
             }
         }
     }
@@ -79,5 +94,9 @@ class RoundStateViewModel(application: Application) :
     override fun onCleared() {
         dataClient.removeListener(this)
         super.onCleared()
+    }
+
+    companion object {
+        private const val TAG = "RoundStateViewModel"
     }
 }

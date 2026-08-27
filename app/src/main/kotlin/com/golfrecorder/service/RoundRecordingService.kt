@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.golfrecorder.MainActivity
@@ -51,6 +52,7 @@ class RoundRecordingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand action=${intent?.action} roundId=${intent?.getLongExtra(EXTRA_ROUND_ID, -1)} courseId=${intent?.getLongExtra(EXTRA_COURSE_ID, -1)}")
         if (intent?.action == ACTION_REFRESH) {
             serviceScope.launch { pushState() }
             return START_STICKY
@@ -124,6 +126,7 @@ class RoundRecordingService : Service() {
         if (roundId <= 0) return
         val dataMapRequest = PutDataMapRequest.create(WearSync.STATE_PATH).apply {
             dataMap.putBoolean(WearSync.KEY_ROUND_ACTIVE, roundActive)
+            dataMap.putLong(WearSync.KEY_UPDATED_AT, System.currentTimeMillis())
             if (roundActive && courseId > 0) {
                 val holeNumber = container.roundRepository.getCurrentHoleNumber(roundId) ?: 1
                 val course = container.courseRepository.getCourseWithHoles(courseId).first()
@@ -143,7 +146,12 @@ class RoundRecordingService : Service() {
                 )
             }
         }.setUrgent()
-        Wearable.getDataClient(this).putDataItem(dataMapRequest.asPutDataRequest()).await()
+        try {
+            val result = Wearable.getDataClient(this).putDataItem(dataMapRequest.asPutDataRequest()).await()
+            Log.d(TAG, "pushState success uri=${result.uri} roundActive=$roundActive")
+        } catch (e: Exception) {
+            Log.e(TAG, "pushState FAILED roundActive=$roundActive", e)
+        }
     }
 
     private fun createNotificationChannel() {
@@ -172,6 +180,7 @@ class RoundRecordingService : Service() {
     }
 
     companion object {
+        private const val TAG = "RoundRecordingService"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "round_recording"
         private const val EXTRA_ROUND_ID = "extra_round_id"

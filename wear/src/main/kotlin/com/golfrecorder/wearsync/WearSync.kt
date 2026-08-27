@@ -26,4 +26,8 @@ object WearSync {
     const val KEY_STROKES_TO_GREEN = "strokesToGreen"
     const val KEY_STROKES_SHORT_GAME = "strokesGreenToHoleOut"
     const val KEY_HOLE_COUNT = "holeCount"
+    /** DataItem은 내용이 바뀌지 않으면 재전송해도 워치의 onDataChanged가 다시 호출되지
+     * 않는다(내용 해시 기준 중복 제거) — 값이 우연히 이전과 같아도 매번 갱신 이벤트가
+     * 뜨도록 보내는 시점의 타임스탬프를 함께 싣는다. 워치 쪽은 이 값을 읽지 않는다. */
+    const val KEY_UPDATED_AT = "updatedAt"
 }
