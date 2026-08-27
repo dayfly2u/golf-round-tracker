@@ -51,6 +51,10 @@ class RoundRecordingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_REFRESH) {
+            serviceScope.launch { pushState() }
+            return START_STICKY
+        }
         roundId = intent?.getLongExtra(EXTRA_ROUND_ID, -1) ?: -1
         courseId = intent?.getLongExtra(EXTRA_COURSE_ID, -1) ?: -1
         serviceScope.launch { pushState() }
@@ -172,6 +176,7 @@ class RoundRecordingService : Service() {
         private const val CHANNEL_ID = "round_recording"
         private const val EXTRA_ROUND_ID = "extra_round_id"
         private const val EXTRA_COURSE_ID = "extra_course_id"
+        private const val ACTION_REFRESH = "com.golfrecorder.service.ACTION_REFRESH"
 
         fun start(context: Context, roundId: Long, courseId: Long) {
             val intent = Intent(context, RoundRecordingService::class.java)
@@ -182,6 +187,11 @@ class RoundRecordingService : Service() {
 
         fun stop(context: Context) {
             context.stopService(Intent(context, RoundRecordingService::class.java))
+        }
+
+        fun refreshState(context: Context) {
+            val intent = Intent(context, RoundRecordingService::class.java).setAction(ACTION_REFRESH)
+            context.startService(intent)
         }
     }
 }

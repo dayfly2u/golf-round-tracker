@@ -99,10 +99,7 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
             )
             CourseSelectScreen(
                 viewModel = vm,
-                onCourseSelected = { courseId, roundId ->
-                    RoundRecordingService.start(context, roundId, courseId)
-                    push(Screen.RoundPlay(roundId, courseId, 1))
-                },
+                onCourseSelected = { courseId, roundId -> push(Screen.RoundPlay(roundId, courseId, 1)) },
                 onBack = { pop() },
             )
         }

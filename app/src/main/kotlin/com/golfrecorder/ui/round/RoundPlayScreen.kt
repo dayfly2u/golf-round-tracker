@@ -51,6 +51,7 @@ import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.domain.model.StrokeCalculator
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.location.LocationCapture
+import com.golfrecorder.service.RoundRecordingService
 import com.golfrecorder.ui.common.PenaltyStepper
 import com.golfrecorder.ui.common.StrokeStepper
 import com.golfrecorder.ui.map.CourseMapSlot
@@ -80,7 +81,7 @@ class RoundPlayViewModel(
     private val shotRepository: ShotRepository,
     private val penaltyRepository: PenaltyRepository,
     val roundId: Long,
-    courseId: Long,
+    val courseId: Long,
     initialHoleNumber: Int,
     /** 라운드가 이미 "완료"된 뒤 결과 화면에서 홀을 리뷰하러 들어온 것인지 — true면
      * 지금 서 있는 곳이 그 홀과 무관하므로(라이브 플레이가 아님) 위치 조정/핀 재지정과
@@ -279,6 +280,12 @@ fun RoundPlayScreen(
     val scope = rememberCoroutineScope()
     val shotMutex = remember { Mutex() }
 
+    LaunchedEffect(Unit) {
+        if (!viewModel.isReview) {
+            RoundRecordingService.start(context, viewModel.roundId, viewModel.courseId)
+        }
+    }
+
     fun handleBack() {
         viewModel.exitRound(onCancelled = onCancelled, onHasProgress = onShowSummary)
     }
@@ -341,6 +348,7 @@ fun RoundPlayScreen(
                     viewModel.removeShot(holeNumber, phase, oldValue)
                 }
             }
+            RoundRecordingService.refreshState(context)
         }
     }
 
@@ -359,11 +367,13 @@ fun RoundPlayScreen(
                     ?: if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
                 viewModel.addPenalty(holeNumber, phase, type, strokeCount, loc?.lat, loc?.lng)
             }
+            RoundRecordingService.refreshState(context)
         }
     }
 
     fun onRemovePenalty(phase: ShotPhase, type: PenaltyType) {
         viewModel.removeLastPenalty(viewModel.currentHoleNumber, phase, type)
+        scope.launch { RoundRecordingService.refreshState(context) }
     }
 
     Scaffold(
@@ -515,11 +525,17 @@ fun RoundPlayScreen(
             Spacer(Modifier.height(24.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Button(
-                    onClick = { viewModel.goToHole(viewModel.currentHoleNumber - 1) },
+                    onClick = {
+                        viewModel.goToHole(viewModel.currentHoleNumber - 1)
+                        scope.launch { RoundRecordingService.refreshState(context) }
+                    },
                     enabled = viewModel.currentHoleNumber > 1,
                 ) { Text("이전 홀") }
                 if (holeCount == 0 || viewModel.currentHoleNumber < holeCount) {
-                    Button(onClick = { viewModel.goToHole(viewModel.currentHoleNumber + 1) }) { Text("다음 홀") }
+                    Button(onClick = {
+                        viewModel.goToHole(viewModel.currentHoleNumber + 1)
+                        scope.launch { RoundRecordingService.refreshState(context) }
+                    }) { Text("다음 홀") }
                 } else if (!viewModel.isReview) {
                     // 이미 완료된 라운드를 리뷰 중이면 다시 완료할 이유가 없으니 버튼을 안 보여준다.
                     Button(onClick = { showFinishConfirm = true }) { Text("완료") }
