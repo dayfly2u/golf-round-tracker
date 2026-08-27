@@ -129,6 +129,14 @@ class RoundPlayViewModel(
             val penalties = penaltyRepository.getPenalties(roundId, holeNumber).first()
             strokesToGreen = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.TO_GREEN)
             strokesGreenToHoleOut = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.SHORT_GAME)
+            // 홀에 들어오는 즉시 hole_records에 기록해둔다 — 한 타도 안 치고 바로
+            // 뒤로 나가도 라운드 결과(요약) 화면의 홀 목록에 그 홀이 바로 보여야
+            // "코스를 고른 순간 라운드가 시작됐다"는 의미와 맞는다.
+            if (!isReview) {
+                val par = courseRepository.getCourseWithHoles(courseId).first()
+                    ?.holes?.find { it.holeNumber == holeNumber }?.par ?: 4
+                roundRepository.saveHoleRecord(roundId, holeNumber, par, strokesToGreen, strokesGreenToHoleOut)
+            }
         }
     }
 
