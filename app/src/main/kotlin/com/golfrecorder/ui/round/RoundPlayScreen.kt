@@ -1,6 +1,8 @@
 package com.golfrecorder.ui.round
 
 import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,6 +54,7 @@ import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.domain.model.StrokeCalculator
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.location.LocationCapture
+import com.golfrecorder.location.LocationTracker
 import com.golfrecorder.service.RoundRecordingService
 import com.golfrecorder.ui.common.PenaltyStepper
 import com.golfrecorder.ui.common.StrokeStepper
@@ -328,6 +332,21 @@ fun RoundPlayScreen(
         }
     }
 
+    val backgroundPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* 결과와 무관하게 앱은 계속 동작한다 — 거부돼도 라운드 진행 중(포그라운드) 추적은 그대로 되고, 폰이 잠들어 있을 때만 최신 위치가 조금 덜 정확할 수 있다. */ }
+
+    // 백그라운드 위치 권한은 반드시 포그라운드(FINE) 권한이 이미 허용된 뒤에 별도로
+    // 요청해야 한다 — 한 번에 같이 요청하면 API 30+에서 조용히 거부된다.
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED
+        ) {
+            backgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }
+    }
+
     val online = remember(viewModel.currentHoleNumber) { isOnline(context) }
 
     var currentLocation by remember { mutableStateOf<AppLatLng?>(null) }
@@ -357,7 +376,7 @@ fun RoundPlayScreen(
         scope.launch {
             shotMutex.withLock {
                 if (newValue > oldValue) {
-                    val loc = if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
+                    val loc = if (hasLocationPermission) LocationTracker.latestLocation(context) else null
                     if (loc != null) viewModel.recordShot(holeNumber, phase, newValue, loc.lat, loc.lng)
                 } else if (newValue < oldValue) {
                     viewModel.removeShot(holeNumber, phase, oldValue)
@@ -379,7 +398,7 @@ fun RoundPlayScreen(
         scope.launch {
             shotMutex.withLock {
                 val loc = lastShotLocation
-                    ?: if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
+                    ?: if (hasLocationPermission) LocationTracker.latestLocation(context) else null
                 viewModel.addPenalty(holeNumber, phase, type, strokeCount, loc?.lat, loc?.lng) {
                     RoundRecordingService.refreshState(context)
                 }

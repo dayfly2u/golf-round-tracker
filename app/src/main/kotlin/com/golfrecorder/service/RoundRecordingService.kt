@@ -16,6 +16,7 @@ import com.golfrecorder.di.AppContainer
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.domain.model.StrokeCalculator
 import com.golfrecorder.location.LocationCapture
+import com.golfrecorder.location.LocationTracker
 import com.golfrecorder.wearsync.WearSync
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.PutDataMapRequest
@@ -53,6 +54,11 @@ class RoundRecordingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand action=${intent?.action} roundId=${intent?.getLongExtra(EXTRA_ROUND_ID, -1)} courseId=${intent?.getLongExtra(EXTRA_COURSE_ID, -1)}")
+        // 서비스가 처음 뜰 때는 아직 위치 권한이 없을 수 있다(RoundPlayScreen이 권한
+        // 허용을 기다리지 않고 서비스를 먼저 시작한다). ACTION_REFRESH는 폰에서 타수/홀이
+        // 바뀔 때마다 오므로 여기서 매번 재시도해두면 권한이 늦게 허용돼도 구독이 살아난다.
+        // 이미 구독 중이면 start()가 즉시 리턴하므로 반복 호출해도 안전하다.
+        LocationTracker.start(applicationContext)
         if (intent?.action == ACTION_REFRESH) {
             serviceScope.launch { pushState() }
             return START_STICKY
@@ -67,6 +73,7 @@ class RoundRecordingService : Service() {
 
     override fun onDestroy() {
         Wearable.getMessageClient(this).removeListener(messageListener)
+        LocationTracker.stop(applicationContext)
         // 스코프를 취소하기 전에 "라운드 종료" 상태가 실제로 전송 완료(혹은 타임아웃)되도록
         // 기다린다 — serviceScope.launch { ... }로 던지고 바로 cancel()하면 코루틴이
         // 실행되기 전에 취소돼 워치에 마지막 상태가 전달되지 않는 경우가 있었다.
@@ -97,7 +104,7 @@ class RoundRecordingService : Service() {
         val shots = container.shotRepository.getShots(roundId, holeNumber).first()
         val penalties = container.penaltyRepository.getPenalties(roundId, holeNumber).first()
         val newValue = StrokeCalculator.currentTotal(shots, penalties, phase) + 1
-        val loc = if (LocationCapture.hasPermission(this)) LocationCapture.getCurrentLocation(this) else null
+        val loc = if (LocationCapture.hasPermission(this)) LocationTracker.latestLocation(this) else null
         if (loc != null) {
             container.shotRepository.recordShot(roundId, holeNumber, phase, newValue, loc.lat, loc.lng)
         }
