@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "golf-round-tracker-android"
 include(":app")
+include(":wear")

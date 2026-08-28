@@ -12,8 +12,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.golfrecorder.di.AppContainer
+import com.golfrecorder.service.RoundRecordingService
 import com.golfrecorder.ui.course.CourseEditScreen
 import com.golfrecorder.ui.course.CourseEditViewModel
 import com.golfrecorder.ui.course.CourseEditViewModelFactory
@@ -62,6 +64,7 @@ class MainActivity : ComponentActivity() {
 private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
     val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
     val current = backStack.last()
+    val context = LocalContext.current
 
     fun push(screen: Screen) {
         backStack.add(screen)
@@ -149,12 +152,13 @@ private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
             RoundPlayScreen(
                 viewModel = vm,
                 mapSlotState = mapSlotState,
-                onFinished = { push(Screen.RoundSummary(screen.roundId, screen.courseId)) },
-                // 진행 상황이 전혀 없는(코스만 고르고 바로 나가는) 라운드는 통째로 지워졌으니
-                // 코스 선택 화면으로만 돌아간다.
-                onCancelled = { pop() },
-                // 이미 진행된 라운드는 홀 리스트(라운드 결과) 화면으로 보여준다 — 코스 선택
-                // 화면을 다시 거치지 않도록 스택을 홈까지 비우고 그 위에 쌓는다.
+                onFinished = {
+                    RoundRecordingService.stop(context)
+                    push(Screen.RoundSummary(screen.roundId, screen.courseId))
+                },
+                // 뒤로가기 시 항상 라운드 결과(요약) 화면으로 보낸다 — 코스를 고른 순간
+                // 이미 라운드가 시작된 것으로 취급하고, 진행된 홀이 없어도 지우지 않는다.
+                // 코스 선택 화면을 다시 거치지 않도록 스택을 홈까지 비우고 그 위에 쌓는다.
                 onShowSummary = {
                     goHome()
                     push(Screen.RoundSummary(screen.roundId, screen.courseId))

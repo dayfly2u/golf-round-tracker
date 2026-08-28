@@ -1,6 +1,8 @@
 package com.golfrecorder.ui.round
 
 import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,8 +51,11 @@ import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.data.repository.ShotRepository
 import com.golfrecorder.domain.model.PenaltyType
 import com.golfrecorder.domain.model.ShotPhase
+import com.golfrecorder.domain.model.StrokeCalculator
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.location.LocationCapture
+import com.golfrecorder.location.LocationTracker
+import com.golfrecorder.service.RoundRecordingService
 import com.golfrecorder.ui.common.PenaltyStepper
 import com.golfrecorder.ui.common.StrokeStepper
 import com.golfrecorder.ui.map.CourseMapSlot
@@ -62,6 +68,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -79,7 +86,7 @@ class RoundPlayViewModel(
     private val shotRepository: ShotRepository,
     private val penaltyRepository: PenaltyRepository,
     val roundId: Long,
-    courseId: Long,
+    val courseId: Long,
     initialHoleNumber: Int,
     /** 라운드가 이미 "완료"된 뒤 결과 화면에서 홀을 리뷰하러 들어온 것인지 — true면
      * 지금 서 있는 곳이 그 홀과 무관하므로(라이브 플레이가 아님) 위치 조정/핀 재지정과
@@ -95,7 +102,9 @@ class RoundPlayViewModel(
     var currentHoleNumber by mutableStateOf(initialHoleNumber)
         private set
     var strokesToGreen by mutableStateOf(0)
+        private set
     var strokesGreenToHoleOut by mutableStateOf(0)
+        private set
 
     private val shotsFlow = MutableStateFlow<List<ShotEntity>>(emptyList())
     val shots: StateFlow<List<ShotEntity>> = shotsFlow
@@ -104,9 +113,26 @@ class RoundPlayViewModel(
     private val penaltiesFlow = MutableStateFlow<List<PenaltyEntity>>(emptyList())
     val penalties: StateFlow<List<PenaltyEntity>> = penaltiesFlow
     private var penaltiesCollectJob: Job? = null
+    private var strokeTotalsJob: Job? = null
 
     init {
         loadHole(initialHoleNumber)
+        if (!isReview) {
+            viewModelScope.launch { roundRepository.updateCurrentHoleNumber(roundId, initialHoleNumber) }
+            // 워치에서 홀을 넘기면(RoundRecordingService가 rounds.currentHoleNumber를
+            // 직접 갱신) 이미 열려있는 폰 화면도 재진입 없이 따라가게 한다. 폰 자신의
+            // goToHole()이 쓴 값은 loadHole()이 currentHoleNumber를 동기적으로 먼저
+            // 갱신해두므로, 이 Flow가 뒤늦게 같은 값을 들고 도착해도 아래 비교에서
+            // 걸러져 중복 loadHole 호출이 일어나지 않는다.
+            viewModelScope.launch {
+                roundRepository.getRoundWithHoleRecords(roundId).collect { rwr ->
+                    val holeNumber = rwr?.round?.currentHoleNumber ?: return@collect
+                    if (holeNumber != currentHoleNumber) {
+                        loadHole(holeNumber)
+                    }
+                }
+            }
+        }
     }
 
     private fun loadHole(holeNumber: Int) {
@@ -119,16 +145,36 @@ class RoundPlayViewModel(
         penaltiesCollectJob = viewModelScope.launch {
             penaltyRepository.getPenalties(roundId, holeNumber).collect { penaltiesFlow.value = it }
         }
-        viewModelScope.launch {
-            val existing = roundRepository.getRoundWithHoleRecords(roundId).first()
-                ?.holeRecords?.find { it.holeNumber == holeNumber }
-            strokesToGreen = existing?.strokesToGreen ?: 0
-            strokesGreenToHoleOut = existing?.strokesGreenToHoleOut ?: 0
+        // strokesToGreen/strokesGreenToHoleOut을 shots/penalties Flow로부터 계속
+        // 다시 계산한다(1회성 시드가 아님) — 워치가 이 홀의 shots/penalties를 바꿔도
+        // 이미 열려있는 폰 화면이 재진입 없이 곧바로 반영되게 하기 위해서다.
+        strokeTotalsJob?.cancel()
+        strokeTotalsJob = viewModelScope.launch {
+            combine(shotsFlow, penaltiesFlow) { shots, penalties -> shots to penalties }
+                .collect { (shots, penalties) ->
+                    strokesToGreen = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.TO_GREEN)
+                    strokesGreenToHoleOut = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.SHORT_GAME)
+                    // 홀에 들어오는 즉시, 그리고 이후 값이 바뀔 때마다 hole_records에
+                    // 반영해둔다 — 한 타도 안 치고 바로 뒤로 나가도 라운드 결과(요약)
+                    // 화면의 홀 목록에 그 홀이 바로 보여야 "코스를 고른 순간 라운드가
+                    // 시작됐다"는 의미와 맞는다.
+                    if (!isReview) {
+                        val par = courseRepository.getCourseWithHoles(courseId).first()
+                            ?.holes?.find { it.holeNumber == holeNumber }?.par ?: 4
+                        roundRepository.saveHoleRecord(roundId, holeNumber, par, strokesToGreen, strokesGreenToHoleOut)
+                    }
+                }
         }
     }
 
-    fun goToHole(holeNumber: Int) {
-        saveCurrentHole { loadHole(holeNumber) }
+    fun goToHole(holeNumber: Int, onDone: () -> Unit = {}) {
+        saveCurrentHole {
+            viewModelScope.launch {
+                roundRepository.updateCurrentHoleNumber(roundId, holeNumber)
+                onDone()
+            }
+            loadHole(holeNumber)
+        }
     }
 
     fun finishRound(onFinished: () -> Unit) {
@@ -136,24 +182,6 @@ class RoundPlayViewModel(
             viewModelScope.launch {
                 roundRepository.finishRound(roundId, System.currentTimeMillis())
                 onFinished()
-            }
-        }
-    }
-
-    /**
-     * 뒤로가기 시: 아직 한 홀도 저장 안 된(= 코스만 고르고 바로 나가는) 라운드는
-     * 목록에 빈 라운드가 남는 걸 막기 위해 통째로 지운다. 이미 진행된 라운드는
-     * 남겨두고 홀 리스트(라운드 결과) 화면을 보여준다.
-     */
-    fun exitRound(onCancelled: () -> Unit, onHasProgress: () -> Unit) {
-        viewModelScope.launch {
-            val hasProgress = roundRepository.getRoundWithHoleRecords(roundId).first()
-                ?.holeRecords?.isNotEmpty() == true
-            if (hasProgress) {
-                onHasProgress()
-            } else {
-                roundRepository.deleteRound(roundId)
-                onCancelled()
             }
         }
     }
@@ -187,36 +215,37 @@ class RoundPlayViewModel(
      * OB는 제자리 재티(+1)와 특설티 이동(+2)이 둘 다 있어서 [strokeCount]로 몇 타가
      * 늘어나는지 받는다 — 다만 "OB 몇 번 났는지"는 항상 1건으로 센다(벌타 크기와
      * 무관하게 penalties 테이블에는 한 행만 추가).
-     * GPS를 못 잡아도(lat/lng == null) 타수는 일반 샷과 동일하게 우선 올리고, 지도에
-     * 표시할 위치만 있을 때 추가로 저장한다 — 벌타를 놓치는 것이 위치를 못 찍는 것보다
-     * 훨씬 치명적인 실수라서다.
+     * GPS를 못 잡으면(lat/lng == null) onStepperChange의 일반 샷과 동일하게 이 벌타
+     * 자체를 기록하지 않는다 — strokesToGreen/strokesGreenToHoleOut이 이제 DB의
+     * shots/penalties에서 매번 다시 계산되는 값이라, DB에 쓰이지 않은 변화를 메모리에만
+     * 남겨둘 방법이 없다.
      */
-    fun addPenalty(holeNumber: Int, phase: ShotPhase, type: PenaltyType, strokeCount: Int, lat: Double?, lng: Double?) {
-        val newValue = when (phase) {
-            ShotPhase.TO_GREEN -> { strokesToGreen += strokeCount; strokesToGreen }
-            ShotPhase.SHORT_GAME -> { strokesGreenToHoleOut += strokeCount; strokesGreenToHoleOut }
-        }
+    fun addPenalty(holeNumber: Int, phase: ShotPhase, type: PenaltyType, strokeCount: Int, lat: Double?, lng: Double?, onDone: () -> Unit = {}) {
         if (lat != null && lng != null) {
+            val newValue = when (phase) {
+                ShotPhase.TO_GREEN -> strokesToGreen + strokeCount
+                ShotPhase.SHORT_GAME -> strokesGreenToHoleOut + strokeCount
+            }
             viewModelScope.launch {
                 penaltyRepository.addPenalty(
                     roundId, holeNumber, phase, type, newValue, strokeCount, lat, lng
                 )
+                onDone()
             }
+        } else {
+            onDone()
         }
     }
 
     /** 가장 최근에 추가한 이 종류의 벌타 1건을 되돌린다 — 그 건이 실제로 더한 타수만큼 뺀다. */
-    fun removeLastPenalty(holeNumber: Int, phase: ShotPhase, type: PenaltyType) {
+    fun removeLastPenalty(holeNumber: Int, phase: ShotPhase, type: PenaltyType, onDone: () -> Unit = {}) {
         val last = penaltiesFlow.value
             .filter { it.phase == phase.name && it.type == type.name }
             .maxByOrNull { it.penaltyIndex }
-            ?: return
-        when (phase) {
-            ShotPhase.TO_GREEN -> strokesToGreen -= last.strokeCount
-            ShotPhase.SHORT_GAME -> strokesGreenToHoleOut -= last.strokeCount
-        }
+            ?: run { onDone(); return }
         viewModelScope.launch {
             penaltyRepository.removePenalty(roundId, holeNumber, phase, type, last.penaltyIndex)
+            onDone()
         }
     }
 
@@ -265,17 +294,22 @@ fun RoundPlayScreen(
     viewModel: RoundPlayViewModel,
     mapSlotState: MapSlotState,
     onFinished: () -> Unit,
-    onCancelled: () -> Unit,
     onShowSummary: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shotMutex = remember { Mutex() }
 
-    fun handleBack() {
-        viewModel.exitRound(onCancelled = onCancelled, onHasProgress = onShowSummary)
+    LaunchedEffect(Unit) {
+        if (!viewModel.isReview) {
+            RoundRecordingService.start(context, viewModel.roundId, viewModel.courseId)
+        }
     }
-    BackHandler { handleBack() }
+
+    // 코스를 선택한 순간 이미 라운드가 시작된 것으로 취급한다 — 진행된 홀이
+    // 하나도 없어도 뒤로가기로 라운드를 통째로 지우지 않고 라운드 결과(요약)
+    // 화면으로 보낸다. 필요하면 그 화면에서 명시적으로 삭제할 수 있다.
+    BackHandler { onShowSummary() }
 
     val holes by viewModel.holes.collectAsStateWithLifecycle()
     val shots by viewModel.shots.collectAsStateWithLifecycle()
@@ -295,6 +329,21 @@ fun RoundPlayScreen(
     LaunchedEffect(Unit) {
         if (!hasLocationPermission) {
             permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+    val backgroundPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* 결과와 무관하게 앱은 계속 동작한다 — 거부돼도 라운드 진행 중(포그라운드) 추적은 그대로 되고, 폰이 잠들어 있을 때만 최신 위치가 조금 덜 정확할 수 있다. */ }
+
+    // 백그라운드 위치 권한은 반드시 포그라운드(FINE) 권한이 이미 허용된 뒤에 별도로
+    // 요청해야 한다 — 한 번에 같이 요청하면 API 30+에서 조용히 거부된다.
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED
+        ) {
+            backgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         }
     }
 
@@ -319,21 +368,21 @@ fun RoundPlayScreen(
         }
     }
 
-    fun onStepperChange(phase: ShotPhase, oldValue: Int, newValue: Int, applyValue: (Int) -> Unit) {
+    fun onStepperChange(phase: ShotPhase, oldValue: Int, newValue: Int) {
         // GPS fix를 기다리는 동안 홀이 바뀔 수 있어, 지금 화면의 홀 번호를 미리 캡처해
         // 넘긴다 — viewModel.currentHoleNumber를 나중에 다시 읽으면 이미 다음 홀로
         // 바뀌어 있을 수 있다.
         val holeNumber = viewModel.currentHoleNumber
-        applyValue(newValue)
         scope.launch {
             shotMutex.withLock {
                 if (newValue > oldValue) {
-                    val loc = if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
+                    val loc = if (hasLocationPermission) LocationTracker.latestLocation(context) else null
                     if (loc != null) viewModel.recordShot(holeNumber, phase, newValue, loc.lat, loc.lng)
                 } else if (newValue < oldValue) {
                     viewModel.removeShot(holeNumber, phase, oldValue)
                 }
             }
+            RoundRecordingService.refreshState(context)
         }
     }
 
@@ -349,21 +398,25 @@ fun RoundPlayScreen(
         scope.launch {
             shotMutex.withLock {
                 val loc = lastShotLocation
-                    ?: if (hasLocationPermission) LocationCapture.getCurrentLocation(context) else null
-                viewModel.addPenalty(holeNumber, phase, type, strokeCount, loc?.lat, loc?.lng)
+                    ?: if (hasLocationPermission) LocationTracker.latestLocation(context) else null
+                viewModel.addPenalty(holeNumber, phase, type, strokeCount, loc?.lat, loc?.lng) {
+                    RoundRecordingService.refreshState(context)
+                }
             }
         }
     }
 
     fun onRemovePenalty(phase: ShotPhase, type: PenaltyType) {
-        viewModel.removeLastPenalty(viewModel.currentHoleNumber, phase, type)
+        viewModel.removeLastPenalty(viewModel.currentHoleNumber, phase, type) {
+            RoundRecordingService.refreshState(context)
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("${viewModel.currentHoleNumber}홀 (파 $par)") },
-                navigationIcon = { TextButton(onClick = { handleBack() }) { Text("< 뒤로") } },
+                navigationIcon = { TextButton(onClick = { onShowSummary() }) { Text("< 뒤로") } },
             )
         },
     ) { padding ->
@@ -466,7 +519,7 @@ fun RoundPlayScreen(
                     value = viewModel.strokesToGreen,
                     onValueChange = { newValue ->
                         val old = viewModel.strokesToGreen
-                        onStepperChange(ShotPhase.TO_GREEN, old, newValue) { viewModel.strokesToGreen = it }
+                        onStepperChange(ShotPhase.TO_GREEN, old, newValue)
                     },
                 )
                 Spacer(Modifier.height(4.dp))
@@ -501,18 +554,26 @@ fun RoundPlayScreen(
                     value = viewModel.strokesGreenToHoleOut,
                     onValueChange = { newValue ->
                         val old = viewModel.strokesGreenToHoleOut
-                        onStepperChange(ShotPhase.SHORT_GAME, old, newValue) { viewModel.strokesGreenToHoleOut = it }
+                        onStepperChange(ShotPhase.SHORT_GAME, old, newValue)
                     },
                 )
             }
             Spacer(Modifier.height(24.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Button(
-                    onClick = { viewModel.goToHole(viewModel.currentHoleNumber - 1) },
+                    onClick = {
+                        viewModel.goToHole(viewModel.currentHoleNumber - 1) {
+                            RoundRecordingService.refreshState(context)
+                        }
+                    },
                     enabled = viewModel.currentHoleNumber > 1,
                 ) { Text("이전 홀") }
                 if (holeCount == 0 || viewModel.currentHoleNumber < holeCount) {
-                    Button(onClick = { viewModel.goToHole(viewModel.currentHoleNumber + 1) }) { Text("다음 홀") }
+                    Button(onClick = {
+                        viewModel.goToHole(viewModel.currentHoleNumber + 1) {
+                            RoundRecordingService.refreshState(context)
+                        }
+                    }) { Text("다음 홀") }
                 } else if (!viewModel.isReview) {
                     // 이미 완료된 라운드를 리뷰 중이면 다시 완료할 이유가 없으니 버튼을 안 보여준다.
                     Button(onClick = { showFinishConfirm = true }) { Text("완료") }

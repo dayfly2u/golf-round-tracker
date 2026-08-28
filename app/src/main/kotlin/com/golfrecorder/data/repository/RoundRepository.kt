@@ -44,4 +44,9 @@ class RoundRepository(private val roundDao: RoundDao) {
     suspend fun deleteRound(roundId: Long) = roundDao.deleteRound(roundId)
 
     suspend fun countRoundsForCourse(courseId: Long): Int = roundDao.countRoundsForCourse(courseId)
+
+    suspend fun getCurrentHoleNumber(roundId: Long): Int? = roundDao.getCurrentHoleNumber(roundId)
+
+    suspend fun updateCurrentHoleNumber(roundId: Long, holeNumber: Int) =
+        roundDao.updateCurrentHoleNumber(roundId, holeNumber)
 }

@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.golfrecorder.data.local.relation.CourseWithHoles
+import com.golfrecorder.service.RoundRecordingService
 import com.golfrecorder.data.repository.CourseRepository
 import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.domain.model.HoleResult
@@ -168,6 +170,7 @@ fun RoundSummaryScreen(
 ) {
     val holeResults by viewModel.holeResults.collectAsStateWithLifecycle()
     val courseName by viewModel.courseName.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val totalStrokes = holeResults.sumOf { it.totalStrokes }
     val totalScoreToPar = holeResults.sumOf { it.scoreToPar }
@@ -185,6 +188,10 @@ fun RoundSummaryScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
+                    // 지금 보고 있는 라운드가 워치 연동 서비스가 추적 중인 라운드일 수
+                    // 있으므로(가장 최근에 연 라운드 화면 기준) 삭제 시 함께 멈춘다 —
+                    // 안 그러면 삭제된 라운드의 낡은 정보가 워치에 계속 남아있게 된다.
+                    RoundRecordingService.stop(context)
                     viewModel.delete(onHome)
                 }) { Text("삭제") }
             },

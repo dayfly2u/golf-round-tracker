@@ -59,3 +59,11 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
         db.execSQL("UPDATE course_youtube_links SET category = 'ROUND' WHERE category IN ('LESSON', 'OTHER')")
     }
 }
+
+/** 워치 연동을 위해 "지금 몇 홀인지"를 라운드 행에 영구 저장한다 — 순수 컬럼 추가라
+ * 기존 데이터에는 영향이 없다(기존 행은 전부 기본값 1로 채워짐). */
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE rounds ADD COLUMN currentHoleNumber INTEGER NOT NULL DEFAULT 1")
+    }
+}

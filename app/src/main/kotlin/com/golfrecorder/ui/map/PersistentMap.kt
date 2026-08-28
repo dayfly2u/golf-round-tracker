@@ -26,9 +26,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.golfrecorder.location.LatLng as AppLatLng
+import com.golfrecorder.util.haversineMeters
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.LatLng
+import com.kakao.vectormap.LatLngBounds
 import com.kakao.vectormap.MapLifeCycleCallback
 import com.kakao.vectormap.MapType
 import com.kakao.vectormap.MapView
@@ -42,6 +44,13 @@ val MAP_HEIGHT = 380.dp
 
 /** 지도를 쓰지 않는 화면일 때 지도 뷰를 치워둘 위치(화면 훨씬 아래). */
 private const val HIDDEN_OFFSET_Y = 10_000
+
+/** 리뷰 모드에서 그 홀의 샷(+그린)을 전부 보여줄 때 화면 가장자리에 둘 여백. */
+private val MAP_FIT_PADDING = 40.dp
+
+/** 이보다 퍼져 있어야 "화면을 채워서 보여줄 만큼 넓다"고 보고, 아니면 고정 줌으로 중심만 맞춘다
+ * (예: 홀인원처럼 샷이 한 곳에 몰려 있으면 fitMapPoints가 억지로 최대 줌까지 당겨버린다). */
+private const val MIN_FIT_SPAN_METERS = 10.0
 
 /**
  * 지금 화면이 지도에 요청하는 내용. 위치/크기와 그릴 데이터를 한 번에 담는다.
@@ -254,9 +263,37 @@ fun PersistentCourseMap(state: MapSlotState) {
         request?.greenLocation
             ?: request?.shots?.firstOrNull()?.let { AppLatLng(it.lat, it.lng) }
     }
-    LaunchedEffect(kakaoMapState.value, cameraKey, center) {
+    // 리뷰 모드(라운드 종료 후 그 홀을 다시 볼 때)에는 고정 줌으로 한 점만 중심에
+    // 맞추지 않고, 그 홀에서 친 모든 샷(+그린)이 화면 안에 다 들어오도록 카메라를
+    // 맞춘다 — 필드 테스트에서 긴 홀은 고정 줌(17)으로는 티샷이 화면 밖으로 잘리는
+    // 경우가 있었다.
+    val fitPoints: List<AppLatLng> = if (request?.preferCurrentLocation == false) {
+        buildList {
+            request.greenLocation?.let { add(it) }
+            request.shots.forEach { add(AppLatLng(it.lat, it.lng)) }
+        }
+    } else {
+        emptyList()
+    }
+    LaunchedEffect(kakaoMapState.value, cameraKey, center, fitPoints) {
         val map = kakaoMapState.value ?: return@LaunchedEffect
-        if (cameraKey != null && center != null) {
+        if (cameraKey == null) return@LaunchedEffect
+        val lats = fitPoints.map { it.lat }
+        val lngs = fitPoints.map { it.lng }
+        val spanMeters = if (fitPoints.size >= 2) {
+            haversineMeters(lats.min(), lngs.min(), lats.max(), lngs.max())
+        } else {
+            0.0
+        }
+        if (fitPoints.size >= 2 && spanMeters >= MIN_FIT_SPAN_METERS) {
+            val bounds = LatLngBounds(
+                LatLng.from(lats.max(), lngs.max()),
+                LatLng.from(lats.min(), lngs.min()),
+            )
+            val paddingPx = with(density) { MAP_FIT_PADDING.roundToPx() }
+            map.moveCamera(CameraUpdateFactory.fitMapPoints(bounds, paddingPx))
+            centeredCameraKey = cameraKey
+        } else if (center != null) {
             // Kakao Vector Map(Android SDK)은 숫자가 높을수록 확대(Web API와 반대 방향).
             map.moveCamera(
                 CameraUpdateFactory.newCenterPosition(LatLng.from(center.lat, center.lng), MAP_ZOOM_LEVEL)

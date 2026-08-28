@@ -61,4 +61,10 @@ interface RoundDao {
 
     @Query("SELECT COUNT(*) FROM rounds WHERE courseId = :courseId")
     suspend fun countRoundsForCourse(courseId: Long): Int
+
+    @Query("SELECT currentHoleNumber FROM rounds WHERE id = :roundId")
+    suspend fun getCurrentHoleNumber(roundId: Long): Int?
+
+    @Query("UPDATE rounds SET currentHoleNumber = :holeNumber WHERE id = :roundId")
+    suspend fun updateCurrentHoleNumber(roundId: Long, holeNumber: Int)
 }
