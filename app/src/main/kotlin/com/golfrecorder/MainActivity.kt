@@ -9,10 +9,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.golfrecorder.di.AppContainer
 import com.golfrecorder.service.RoundRecordingService
@@ -60,136 +64,164 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Screen 인스턴스 하나당 자기만의 ViewModelStore를 준다. 이 앱은 Navigation-Compose의
+ * NavHost를 안 쓰고 수동 백스택([AppRoot]의 backStack)으로 화면을 관리하는데, viewModel()이
+ * 기본으로 잡는 LocalViewModelStoreOwner는 액티비티 하나뿐이라 화면을 뒤로가기 등으로
+ * 떠나도 그 화면의 ViewModel이 절대 onCleared()되지 않고 앱이 켜져있는 내내 백그라운드
+ * 코루틴(shots/penalties Flow 구독 등)이 계속 돌아간다. 실제로 이것 때문에 라운드를
+ * 플레이하다 나가서(RoundPlayViewModel이 안 지워진 채로 계속 삶) 그 라운드를 삭제하면,
+ * 캐스케이드 삭제로 비워진 shots/penalties에 여전히 반응한 그 ViewModel이 hole_records를
+ * 다시 쓰려다 FK 제약 위반으로 크래시가 났다. Screen이 백스택에서 빠질 때 이 스토어를
+ * 확실히 비워서 해결한다.
+ */
+private class ScreenViewModelStoreOwner : ViewModelStoreOwner {
+    override val viewModelStore = ViewModelStore()
+}
+
 @Composable
 private fun AppRoot(container: AppContainer, mapSlotState: MapSlotState) {
     val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
     val current = backStack.last()
     val context = LocalContext.current
+    // Screen은 data class라 필드값이 같으면 구조적으로 동일 취급된다 — 반드시 이 push된
+    // 인스턴스의 identity로 추적해야 한다(CourseEdit의 key에 이미 identityHashCode를
+    // 쓰는 것과 같은 이유). IdentityHashMap으로 인스턴스별 스토어를 구분한다.
+    val viewModelStoreOwners = remember { java.util.IdentityHashMap<Screen, ScreenViewModelStoreOwner>() }
 
     fun push(screen: Screen) {
         backStack.add(screen)
     }
 
     fun pop() {
-        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+        if (backStack.size > 1) {
+            val removed = backStack.removeAt(backStack.lastIndex)
+            viewModelStoreOwners.remove(removed)?.viewModelStore?.clear()
+        }
     }
 
     fun goHome() {
-        while (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+        while (backStack.size > 1) {
+            val removed = backStack.removeAt(backStack.lastIndex)
+            viewModelStoreOwners.remove(removed)?.viewModelStore?.clear()
+        }
     }
 
     BackHandler(enabled = backStack.size > 1) { pop() }
 
-    when (val screen = current) {
-        is Screen.Home -> {
-            val vm = viewModel<RoundHistoryViewModel>(
-                factory = RoundHistoryViewModelFactory(container.roundRepository),
-            )
-            RoundHistoryScreen(
-                viewModel = vm,
-                onStartRound = { push(Screen.CourseSelect) },
-                onManageCourses = { push(Screen.CourseManage) },
-                onRoundClick = { round -> push(Screen.RoundSummary(round.roundId, round.courseId)) },
-            )
-        }
+    val owner = viewModelStoreOwners.getOrPut(current) { ScreenViewModelStoreOwner() }
+    CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+        when (val screen = current) {
+            is Screen.Home -> {
+                val vm = viewModel<RoundHistoryViewModel>(
+                    factory = RoundHistoryViewModelFactory(container.roundRepository),
+                )
+                RoundHistoryScreen(
+                    viewModel = vm,
+                    onStartRound = { push(Screen.CourseSelect) },
+                    onManageCourses = { push(Screen.CourseManage) },
+                    onRoundClick = { round -> push(Screen.RoundSummary(round.roundId, round.courseId)) },
+                )
+            }
 
-        is Screen.CourseSelect -> {
-            val vm = viewModel<CourseSelectViewModel>(
-                factory = CourseSelectViewModelFactory(container.courseRepository, container.roundRepository),
-            )
-            CourseSelectScreen(
-                viewModel = vm,
-                onCourseSelected = { courseId, roundId -> push(Screen.RoundPlay(roundId, courseId, 1)) },
-                onBack = { pop() },
-            )
-        }
+            is Screen.CourseSelect -> {
+                val vm = viewModel<CourseSelectViewModel>(
+                    factory = CourseSelectViewModelFactory(container.courseRepository, container.roundRepository),
+                )
+                CourseSelectScreen(
+                    viewModel = vm,
+                    onCourseSelected = { courseId, roundId -> push(Screen.RoundPlay(roundId, courseId, 1)) },
+                    onBack = { pop() },
+                )
+            }
 
-        is Screen.CourseManage -> {
-            val vm = viewModel<CourseManageViewModel>(
-                factory = CourseManageViewModelFactory(
-                    container.courseRepository,
-                    container.courseYoutubeLinkRepository,
-                ),
-            )
-            CourseManageScreen(
-                viewModel = vm,
-                onAddCourse = { push(Screen.CourseEdit(null)) },
-                onEditCourse = { courseId -> push(Screen.CourseEdit(courseId)) },
-                onBack = { pop() },
-            )
-        }
+            is Screen.CourseManage -> {
+                val vm = viewModel<CourseManageViewModel>(
+                    factory = CourseManageViewModelFactory(
+                        container.courseRepository,
+                        container.courseYoutubeLinkRepository,
+                    ),
+                )
+                CourseManageScreen(
+                    viewModel = vm,
+                    onAddCourse = { push(Screen.CourseEdit(null)) },
+                    onEditCourse = { courseId -> push(Screen.CourseEdit(courseId)) },
+                    onBack = { pop() },
+                )
+            }
 
-        is Screen.CourseEdit -> {
-            val vm = viewModel<CourseEditViewModel>(
-                factory = CourseEditViewModelFactory(
-                    container.courseRepository,
-                    container.courseYoutubeLinkRepository,
-                    container.roundRepository,
-                    screen.courseId,
-                ),
-                // 필드값이 아니라 이 push된 Screen 인스턴스의 identity로 키를 잡는다.
-                // courseId가 null인 "추가" 화면은 필드값 기준 키가 항상 동일해서, 키가 없으면
-                // 이전 방문의 ViewModel이 그대로 재사용되는 버그가 생긴다.
-                key = "course-edit-${System.identityHashCode(screen)}",
-            )
-            CourseEditScreen(viewModel = vm, isNew = screen.courseId == null, onBack = { pop() })
-        }
+            is Screen.CourseEdit -> {
+                val vm = viewModel<CourseEditViewModel>(
+                    factory = CourseEditViewModelFactory(
+                        container.courseRepository,
+                        container.courseYoutubeLinkRepository,
+                        container.roundRepository,
+                        screen.courseId,
+                    ),
+                    // 필드값이 아니라 이 push된 Screen 인스턴스의 identity로 키를 잡는다.
+                    // courseId가 null인 "추가" 화면은 필드값 기준 키가 항상 동일해서, 키가 없으면
+                    // 이전 방문의 ViewModel이 그대로 재사용되는 버그가 생긴다.
+                    key = "course-edit-${System.identityHashCode(screen)}",
+                )
+                CourseEditScreen(viewModel = vm, isNew = screen.courseId == null, onBack = { pop() })
+            }
 
-        is Screen.RoundPlay -> {
-            val vm = viewModel<RoundPlayViewModel>(
-                factory = RoundPlayViewModelFactory(
-                    container.roundRepository,
-                    container.courseRepository,
-                    container.shotRepository,
-                    container.penaltyRepository,
-                    screen.roundId,
-                    screen.courseId,
-                    screen.holeNumber,
-                    screen.isReview,
-                ),
-                key = "round-play-${System.identityHashCode(screen)}",
-            )
-            RoundPlayScreen(
-                viewModel = vm,
-                mapSlotState = mapSlotState,
-                onFinished = {
-                    RoundRecordingService.stop(context)
-                    push(Screen.RoundSummary(screen.roundId, screen.courseId))
-                },
-                // 뒤로가기 시 항상 라운드 결과(요약) 화면으로 보낸다 — 코스를 고른 순간
-                // 이미 라운드가 시작된 것으로 취급하고, 진행된 홀이 없어도 지우지 않는다.
-                // 코스 선택 화면을 다시 거치지 않도록 스택을 홈까지 비우고 그 위에 쌓는다.
-                onShowSummary = {
-                    goHome()
-                    push(Screen.RoundSummary(screen.roundId, screen.courseId))
-                },
-            )
-        }
+            is Screen.RoundPlay -> {
+                val vm = viewModel<RoundPlayViewModel>(
+                    factory = RoundPlayViewModelFactory(
+                        container.roundRepository,
+                        container.courseRepository,
+                        container.shotRepository,
+                        container.penaltyRepository,
+                        screen.roundId,
+                        screen.courseId,
+                        screen.holeNumber,
+                        screen.isReview,
+                    ),
+                    key = "round-play-${System.identityHashCode(screen)}",
+                )
+                RoundPlayScreen(
+                    viewModel = vm,
+                    mapSlotState = mapSlotState,
+                    onFinished = {
+                        RoundRecordingService.stop(context)
+                        push(Screen.RoundSummary(screen.roundId, screen.courseId))
+                    },
+                    // 뒤로가기 시 항상 라운드 결과(요약) 화면으로 보낸다 — 코스를 고른 순간
+                    // 이미 라운드가 시작된 것으로 취급하고, 진행된 홀이 없어도 지우지 않는다.
+                    // 코스 선택 화면을 다시 거치지 않도록 스택을 홈까지 비우고 그 위에 쌓는다.
+                    onShowSummary = {
+                        goHome()
+                        push(Screen.RoundSummary(screen.roundId, screen.courseId))
+                    },
+                )
+            }
 
-        is Screen.RoundSummary -> {
-            val vm = viewModel<RoundSummaryViewModel>(
-                factory = RoundSummaryViewModelFactory(
-                    container.roundRepository,
-                    container.courseRepository,
-                    screen.roundId,
-                    screen.courseId,
-                ),
-                key = "round-summary-${System.identityHashCode(screen)}",
-            )
-            RoundSummaryScreen(
-                viewModel = vm,
-                onEditHole = { holeNumber ->
-                    // 코스가 삭제된 라운드는 화면에서 이미 이 콜백을 못 누르게 막아뒀지만,
-                    // courseId가 null이면 어차피 홀 정보를 불러올 수 없으니 한 번 더 막는다.
-                    // 리뷰 모드 여부는 "완료" 버튼을 눌렀는지(finishedAt)로 판단한다 — 아직
-                    // 안 끝난 라운드는 결과 화면에서 홀을 눌러도 이어서 플레이하는 것이므로
-                    // 라이브 모드(위치 조정 등)를 그대로 써야 한다.
-                    screen.courseId?.let { courseId ->
-                        push(Screen.RoundPlay(screen.roundId, courseId, holeNumber, isReview = vm.isFinished))
-                    }
-                },
-                onHome = { goHome() },
-            )
+            is Screen.RoundSummary -> {
+                val vm = viewModel<RoundSummaryViewModel>(
+                    factory = RoundSummaryViewModelFactory(
+                        container.roundRepository,
+                        container.courseRepository,
+                        screen.roundId,
+                        screen.courseId,
+                    ),
+                    key = "round-summary-${System.identityHashCode(screen)}",
+                )
+                RoundSummaryScreen(
+                    viewModel = vm,
+                    onEditHole = { holeNumber ->
+                        // 코스가 삭제된 라운드는 화면에서 이미 이 콜백을 못 누르게 막아뒀지만,
+                        // courseId가 null이면 어차피 홀 정보를 불러올 수 없으니 한 번 더 막는다.
+                        // 리뷰 모드 여부는 "완료" 버튼을 눌렀는지(finishedAt)로 판단한다 — 아직
+                        // 안 끝난 라운드는 결과 화면에서 홀을 눌러도 이어서 플레이하는 것이므로
+                        // 라이브 모드(위치 조정 등)를 그대로 써야 한다.
+                        screen.courseId?.let { courseId ->
+                            push(Screen.RoundPlay(screen.roundId, courseId, holeNumber, isReview = vm.isFinished))
+                        }
+                    },
+                    onHome = { goHome() },
+                )
+            }
         }
     }
 }

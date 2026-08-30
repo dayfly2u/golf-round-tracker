@@ -158,7 +158,10 @@ class RoundPlayViewModel(
                     // 반영해둔다 — 한 타도 안 치고 바로 뒤로 나가도 라운드 결과(요약)
                     // 화면의 홀 목록에 그 홀이 바로 보여야 "코스를 고른 순간 라운드가
                     // 시작됐다"는 의미와 맞는다.
-                    if (!isReview) {
+                    // 라운드가 이미 삭제됐으면 절대 쓰지 않는다 — 삭제가 shots/penalties를
+                    // 캐스케이드로 비우면 이 collect가 한 번 더 깨어나는데, 그때 없는 라운드의
+                    // hole_records를 쓰려다 FK 제약 위반으로 크래시가 났었다.
+                    if (!isReview && roundRepository.getCurrentHoleNumber(roundId) != null) {
                         val par = courseRepository.getCourseWithHoles(courseId).first()
                             ?.holes?.find { it.holeNumber == holeNumber }?.par ?: 4
                         roundRepository.saveHoleRecord(roundId, holeNumber, par, strokesToGreen, strokesGreenToHoleOut)
