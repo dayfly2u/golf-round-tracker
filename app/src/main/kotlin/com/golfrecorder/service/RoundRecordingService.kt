@@ -61,12 +61,18 @@ class RoundRecordingService : Service() {
         LocationTracker.start(applicationContext)
         if (intent?.action == ACTION_REFRESH) {
             serviceScope.launch { pushState() }
-            return START_STICKY
+            // START_STICKY를 쓰면 시스템이 메모리 부족으로 프로세스를 죽였다가 나중에
+            // intent 없이 재시작시키는데, 그 경우 roundId/courseId를 알 방법이 없어
+            // -1로 남는다 — 그러면 handleAction/pushState가 전부 조용히 no-op되면서도
+            // GPS는 계속 폴링하는 "좀비" 서비스가 된다(불필요한 배터리 소모). 라운드
+            // 화면을 다시 열면 RoundPlayScreen이 유효한 값으로 다시 start()를 호출해
+            // 정상 복구되므로, 자동 재시작에 의존하지 않는 게 더 안전하다.
+            return START_NOT_STICKY
         }
         roundId = intent?.getLongExtra(EXTRA_ROUND_ID, -1) ?: -1
         courseId = intent?.getLongExtra(EXTRA_COURSE_ID, -1) ?: -1
         serviceScope.launch { pushState() }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

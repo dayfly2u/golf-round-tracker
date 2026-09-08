@@ -3,6 +3,7 @@ package com.golfrecorder.ui.round
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -380,7 +381,13 @@ fun RoundPlayScreen(
             shotMutex.withLock {
                 if (newValue > oldValue) {
                     val loc = if (hasLocationPermission) LocationTracker.latestLocation(context) else null
-                    if (loc != null) viewModel.recordShot(holeNumber, phase, newValue, loc.lat, loc.lng)
+                    if (loc != null) {
+                        viewModel.recordShot(holeNumber, phase, newValue, loc.lat, loc.lng)
+                    } else {
+                        // 위치가 없으면 아무 피드백 없이 그냥 무시돼서 버튼이 안 눌린 것처럼
+                        // 보이는 문제가 있었다 — 최소한 왜 안 올라갔는지는 알려준다.
+                        Toast.makeText(context, "위치를 가져오지 못해 타수가 기록되지 않았습니다", Toast.LENGTH_SHORT).show()
+                    }
                 } else if (newValue < oldValue) {
                     viewModel.removeShot(holeNumber, phase, oldValue)
                 }
@@ -402,6 +409,9 @@ fun RoundPlayScreen(
             shotMutex.withLock {
                 val loc = lastShotLocation
                     ?: if (hasLocationPermission) LocationTracker.latestLocation(context) else null
+                if (loc == null) {
+                    Toast.makeText(context, "위치를 가져오지 못해 벌타가 기록되지 않았습니다", Toast.LENGTH_SHORT).show()
+                }
                 viewModel.addPenalty(holeNumber, phase, type, strokeCount, loc?.lat, loc?.lng) {
                     RoundRecordingService.refreshState(context)
                 }
