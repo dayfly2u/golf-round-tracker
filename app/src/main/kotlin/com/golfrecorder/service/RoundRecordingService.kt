@@ -37,6 +37,9 @@ class RoundRecordingService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var roundId: Long = -1
     private var courseId: Long = -1
+    // 워치에서 누른 버튼이 GPS를 못 잡아 기록되지 않았을 때, 그 시각을 남겨뒀다가
+    // pushState()에서 워치로 실어 보낸다(워치는 이 값이 바뀌면 진동으로 알려준다).
+    private var lastFailedAt: Long = 0L
 
     private val messageListener = MessageClient.OnMessageReceivedListener { event ->
         if (event.path != WearSync.ACTION_PATH) return@OnMessageReceivedListener
@@ -113,6 +116,11 @@ class RoundRecordingService : Service() {
         val loc = if (LocationCapture.hasPermission(this)) LocationTracker.latestLocation(this) else null
         if (loc != null) {
             container.shotRepository.recordShot(roundId, holeNumber, phase, newValue, loc.lat, loc.lng)
+        } else {
+            // 폰 쪽(RoundPlayScreen)은 이 경우 Toast로 바로 알려주지만, 워치는 텍스트를
+            // 띄우기 부담스러운 화면이라 대신 이 시각을 다음 pushState()에 실어 보내
+            // 진동으로 알려준다.
+            lastFailedAt = System.currentTimeMillis()
         }
     }
 
@@ -140,6 +148,7 @@ class RoundRecordingService : Service() {
         val dataMapRequest = PutDataMapRequest.create(WearSync.STATE_PATH).apply {
             dataMap.putBoolean(WearSync.KEY_ROUND_ACTIVE, roundActive)
             dataMap.putLong(WearSync.KEY_UPDATED_AT, System.currentTimeMillis())
+            dataMap.putLong(WearSync.KEY_LAST_FAILED_AT, lastFailedAt)
             if (roundActive && courseId > 0) {
                 val holeNumber = container.roundRepository.getCurrentHoleNumber(roundId) ?: 1
                 val course = container.courseRepository.getCourseWithHoles(courseId).first()
