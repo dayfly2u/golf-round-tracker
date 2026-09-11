@@ -263,11 +263,13 @@ fun PersistentCourseMap(state: MapSlotState) {
         request?.greenLocation
             ?: request?.shots?.firstOrNull()?.let { AppLatLng(it.lat, it.lng) }
     }
-    // 리뷰 모드(라운드 종료 후 그 홀을 다시 볼 때)에는 고정 줌으로 한 점만 중심에
-    // 맞추지 않고, 그 홀에서 친 모든 샷(+그린)이 화면 안에 다 들어오도록 카메라를
-    // 맞춘다 — 필드 테스트에서 긴 홀은 고정 줌(17)으로는 티샷이 화면 밖으로 잘리는
-    // 경우가 있었다.
-    val fitPoints: List<AppLatLng> = if (request?.preferCurrentLocation == false) {
+    // 리뷰든 라운드 진행 중이든, 지금 홀에 타수가 하나라도 기록돼 있으면 고정 줌으로
+    // 한 점만 중심에 맞추지 않고 그 홀에서 친 모든 샷(+그린)이 화면 안에 다 들어오도록
+    // 카메라를 맞춘다 — 진행 중에도 "이전 홀"을 눌러 이미 친 홀을 다시 보면 그 홀의
+    // 궤적이 한눈에 보여야 한다(필드 테스트에서 긴 홀은 고정 줌(17)으로는 티샷이
+    // 화면 밖으로 잘리는 경우가 있었다). 아직 한 타도 안 친 홀은 지금 플레이 중이면
+    // 현재 위치를, 리뷰 중이면 그린 위치를 보여주는 아래 center 로직에 맡긴다.
+    val fitPoints: List<AppLatLng> = if (request != null && request.shots.isNotEmpty()) {
         buildList {
             request.greenLocation?.let { add(it) }
             request.shots.forEach { add(AppLatLng(it.lat, it.lng)) }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -150,6 +151,10 @@ private val BIRDIE_OR_BETTER_COLOR = Color(0xFFBBDEFB) // 연한 파랑
 private val DOUBLE_BOGEY_COLOR = Color(0xFFFFCDD2) // 연한 빨강
 private val WORSE_THAN_DOUBLE_BOGEY_COLOR = Color(0xFFB71C1C) // 진한 빨강
 
+// GIR(그린 적중) 실패 — 그린까지 타수가 (파-2)를 넘긴 홀의 "그린 N" 표기를 눈에 띄게 강조.
+private val GIR_MISS_BG_COLOR = Color(0xFFC62828) // 진한 빨강
+private val GIR_MISS_TEXT_COLOR = Color.White
+
 private fun scoreRowColor(scoreToPar: Int): Color = when {
     scoreToPar == 0 -> PAR_COLOR
     scoreToPar <= -1 -> BIRDIE_OR_BETTER_COLOR
@@ -280,9 +285,24 @@ fun RoundSummaryScreen(
                             .clickable(enabled = viewModel.courseId != null) { onEditHole(hole.holeNumber) }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("${hole.holeNumber}홀 (파${hole.par})", fontWeight = FontWeight.Bold, color = textColor)
-                        Text("그린 ${hole.strokesToGreen} · 숏/퍼팅 ${hole.strokesGreenToHoleOut}", color = textColor)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (hole.isGreenInRegulation) {
+                                Text("그린 ${hole.strokesToGreen}", color = textColor)
+                            } else {
+                                Text(
+                                    "그린 ${hole.strokesToGreen}",
+                                    color = GIR_MISS_TEXT_COLOR,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .background(GIR_MISS_BG_COLOR, RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                                )
+                            }
+                            Text(" · 숏/퍼팅 ${hole.strokesGreenToHoleOut}", color = textColor)
+                        }
                         Text("${hole.totalStrokes}타 (${formatToPar(hole.scoreToPar)})", color = textColor)
                     }
                     HorizontalDivider()
