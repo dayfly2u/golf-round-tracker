@@ -566,7 +566,16 @@ fun RoundPlayScreen(
                 Spacer(Modifier.height(4.dp))
                 Text("OB ${obToGreenCount}회 · 해저드 ${hazardToGreenCount}회")
                 Spacer(Modifier.height(4.dp))
-                Text("숏게임+퍼팅: ${viewModel.strokesGreenToHoleOut}")
+                // "그린 판별"을 눌러 숏게임 샷별로 그린 위/밖이 갈리면, 합산된 숫자
+                // 대신 칩(그린 밖)/퍼팅(그린 위) 개수를 따로 보여준다 — 판별 전에는
+                // 기존처럼 합산 숫자만 보여준다.
+                if (classifiedOnGreen.isNotEmpty()) {
+                    val puttCount = classifiedOnGreen.values.count { it }
+                    val chipCount = classifiedOnGreen.size - puttCount
+                    Text("숏게임 ${chipCount} · 퍼팅 ${puttCount}")
+                } else {
+                    Text("숏게임+퍼팅: ${viewModel.strokesGreenToHoleOut}")
+                }
             } else {
                 StrokeStepper(
                     label = "그린까지 타수",
