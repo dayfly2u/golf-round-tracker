@@ -22,7 +22,7 @@ import com.kakao.vectormap.shape.ShapeLayerOptions
 import com.kakao.vectormap.shape.ShapeLayerPass
 import kotlin.math.roundToInt
 
-data class ShotPoint(val phase: ShotPhase, val lat: Double, val lng: Double)
+data class ShotPoint(val phase: ShotPhase, val lat: Double, val lng: Double, val onGreen: Boolean = false)
 
 /** OB/해저드는 순수 벌타라 실제 '샷'이 아니다 — 선으로 연결하지 않고 위치만 표시한다. */
 data class PenaltyPoint(val type: PenaltyType, val lat: Double, val lng: Double)
@@ -108,8 +108,16 @@ internal fun drawOverlays(
     val shortGameStyles = map.labelManager?.addLabelStyles(
         LabelStyles.from("shot-short-game", LabelStyle.from(R.drawable.ic_dot_blue).setAnchorPoint(0.5f, 0.5f))
     )
+    // "그린 판별" 버튼을 눌러 그린 위(퍼팅)로 판정된 숏게임 샷만 노란 점으로 구분한다.
+    val shortGameOnGreenStyles = map.labelManager?.addLabelStyles(
+        LabelStyles.from("shot-short-game-on-green", LabelStyle.from(R.drawable.ic_dot_yellow).setAnchorPoint(0.5f, 0.5f))
+    )
     shots.forEach { shot ->
-        val styles = if (shot.phase == ShotPhase.TO_GREEN) toGreenStyles else shortGameStyles
+        val styles = when {
+            shot.phase == ShotPhase.TO_GREEN -> toGreenStyles
+            shot.onGreen -> shortGameOnGreenStyles
+            else -> shortGameStyles
+        }
         labelLayer.addLabel(LabelOptions.from(LatLng.from(shot.lat, shot.lng)).setStyles(styles))
     }
 

@@ -28,6 +28,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,6 +61,7 @@ import com.golfrecorder.service.RoundRecordingService
 import com.golfrecorder.ui.common.PenaltyStepper
 import com.golfrecorder.ui.common.StrokeStepper
 import com.golfrecorder.ui.map.CourseMapSlot
+import com.golfrecorder.ui.map.GreenClassifier
 import com.golfrecorder.ui.map.MapSlotState
 import com.golfrecorder.ui.map.PenaltyPoint
 import com.golfrecorder.ui.map.ShotPoint
@@ -362,6 +364,10 @@ fun RoundPlayScreen(
 
     var showFinishConfirm by remember { mutableStateOf(false) }
     var recenterSignal by remember { mutableStateOf(0) }
+    // "그린 판별" 버튼으로 채워지는, 그린 위로 판정된 숏게임 샷의 shotIndex 집합.
+    // 홀이 바뀌면 당연히 초기화돼야 하므로 currentHoleNumber를 remember 키로 쓴다.
+    val classifiedOnGreen = remember(viewModel.currentHoleNumber) { mutableStateMapOf<Int, Boolean>() }
+    var isClassifying by remember(viewModel.currentHoleNumber) { mutableStateOf(false) }
     fun recenterOnCurrentLocation() {
         scope.launch {
             val loc = LocationCapture.getCurrentLocation(context)
@@ -483,6 +489,35 @@ fun RoundPlayScreen(
                 }
                 Spacer(Modifier.height(8.dp))
             }
+            // 숏게임+퍼팅 구간의 각 샷이 그린 위(퍼팅)였는지 밖(칩)이었는지는 입력
+            // 단계에서 구분하지 않으므로, 눌렀을 때만 위성사진 색으로 추정해서 지도
+            // 점 색을 나눠준다 — 네트워크를 타는 작업이라 자동 실행하지 않는다.
+            if (online && shots.any { it.phase == ShotPhase.SHORT_GAME.name }) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(
+                        enabled = !isClassifying,
+                        onClick = {
+                            scope.launch {
+                                isClassifying = true
+                                val toGreenShots = shots.filter { it.phase == ShotPhase.TO_GREEN.name }
+                                val shortGameShots = shots.filter { it.phase == ShotPhase.SHORT_GAME.name }
+                                val result = GreenClassifier.classifyShortGameShots(toGreenShots, shortGameShots)
+                                isClassifying = false
+                                if (result.isEmpty()) {
+                                    Toast.makeText(context, "그린 판별에 실패했습니다. 다시 시도해주세요", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    classifiedOnGreen.clear()
+                                    classifiedOnGreen.putAll(result)
+                                }
+                            }
+                        },
+                    ) { Text(if (isClassifying) "판별 중..." else "그린 판별") }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             when {
                 !hasLocationPermission -> Text("위치 권한이 필요합니다.")
                 online -> CourseMapSlot(
@@ -490,7 +525,13 @@ fun RoundPlayScreen(
                     cameraKey = "round-${viewModel.roundId}-hole-${viewModel.currentHoleNumber}",
                     greenLocation = greenLocation,
                     currentLocation = fixedLocation,
-                    shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
+                    // shotIndex는 phase 안에서만 고유해서(TO_GREEN/SHORT_GAME이 각각
+                    // 1부터 매겨진다) phase를 같이 확인해야 한다 — 안 그러면 번호가
+                    // 우연히 겹치는 TO_GREEN 샷이 노랗게 칠해진다.
+                    shots = shots.map { shot ->
+                        val onGreen = shot.phase == ShotPhase.SHORT_GAME.name && classifiedOnGreen[shot.shotIndex] == true
+                        ShotPoint(ShotPhase.valueOf(shot.phase), shot.lat, shot.lng, onGreen = onGreen)
+                    },
                     penalties = penalties.map { PenaltyPoint(PenaltyType.valueOf(it.type), it.lat, it.lng) },
                     tapToSetGreen = greenLocation == null && !viewModel.isReview,
                     onGreenTap = { tapped -> viewModel.setGreenLocation(tapped.lat, tapped.lng) },
