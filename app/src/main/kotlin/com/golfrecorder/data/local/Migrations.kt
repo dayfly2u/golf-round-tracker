@@ -67,3 +67,22 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
         db.execSQL("ALTER TABLE rounds ADD COLUMN currentHoleNumber INTEGER NOT NULL DEFAULT 1")
     }
 }
+
+/** 숏어프로치(칩)와 퍼팅을 분리 입력하기 위해 ShotPhase에 PUTT을 새로 추가하면서,
+ * 기존에 구분 없이 하나로 합쳐 기록하던(phase='SHORT_GAME') 샷/벌타를 전부 PUTT으로
+ * 재분류한다 — "숏게임+퍼팅"으로 뭉뚱그려 기록하던 시절엔 실제로는 대부분 퍼팅이었고
+ * (칩은 훨씬 드물다), 남은 shots.phase 원본 데이터로 나중에 화면(리뷰 화면, 지도 점
+ * 색)이 그대로 다시 계산하므로 hole_records 컬럼만 바꿔서는 이 재분류가 반영되지
+ * 않는다 — 실제로 값을 갖는 원본 테이블(shots/penalties)을 고쳐야 한다.
+ * hole_records.strokesPutt은 그 위에서 파생되는 값이라 원래 strokesGreenToHoleOut과
+ * 그대로 맞춰서 채운다(숏어프로치=0, 퍼팅=기존 합산값). 새로 분리 입력을 쓰기
+ * 시작하는 시점부터는 실제 phase가 정확히 나뉘어 기록되므로 이 재분류는 이
+ * 마이그레이션 시점의 기존 행에만 적용된다. */
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE hole_records ADD COLUMN strokesPutt INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE hole_records SET strokesPutt = strokesGreenToHoleOut")
+        db.execSQL("UPDATE shots SET phase = 'PUTT' WHERE phase = 'SHORT_GAME'")
+        db.execSQL("UPDATE penalties SET phase = 'PUTT' WHERE phase = 'SHORT_GAME'")
+    }
+}

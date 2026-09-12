@@ -43,12 +43,6 @@ class CourseRepository(private val courseDao: CourseDao) {
         courseId, rating, difficulty, region, distance, travelTime, oneLineReview, transportInfo, clubhouseInfo, courseInfo,
     )
 
-    suspend fun updateGreenLocation(holeId: Long, lat: Double, lng: Double) =
-        courseDao.updateGreenLocation(holeId, lat, lng)
-
-    suspend fun clearGreenLocation(holeId: Long) =
-        courseDao.clearGreenLocation(holeId)
-
     suspend fun deleteCourse(courseId: Long) =
         courseDao.deleteCourse(courseId)
 }

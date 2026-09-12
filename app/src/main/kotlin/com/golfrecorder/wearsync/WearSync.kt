@@ -15,8 +15,10 @@ object WearSync {
 
     const val ACTION_INCREMENT_TO_GREEN = "INCREMENT_TO_GREEN"
     const val ACTION_DECREMENT_TO_GREEN = "DECREMENT_TO_GREEN"
-    const val ACTION_INCREMENT_SHORT_GAME = "INCREMENT_SHORT_GAME"
-    const val ACTION_DECREMENT_SHORT_GAME = "DECREMENT_SHORT_GAME"
+    // 워치는 숏어프로치(칩)는 다루지 않고 퍼팅만 올린다 — 폰에서는 숏어프로치/퍼팅을
+    // 따로 입력할 수 있지만, 워치 화면은 작아서 퍼팅 하나만 남겼다.
+    const val ACTION_INCREMENT_PUTT = "INCREMENT_PUTT"
+    const val ACTION_DECREMENT_PUTT = "DECREMENT_PUTT"
     const val ACTION_NEXT_HOLE = "NEXT_HOLE"
     const val ACTION_PREV_HOLE = "PREV_HOLE"
 
@@ -24,7 +26,7 @@ object WearSync {
     const val KEY_HOLE_NUMBER = "holeNumber"
     const val KEY_PAR = "par"
     const val KEY_STROKES_TO_GREEN = "strokesToGreen"
-    const val KEY_STROKES_SHORT_GAME = "strokesGreenToHoleOut"
+    const val KEY_STROKES_PUTT = "strokesPutt"
     const val KEY_HOLE_COUNT = "holeCount"
     /** DataItem은 내용이 바뀌지 않으면 재전송해도 워치의 onDataChanged가 다시 호출되지
      * 않는다(내용 해시 기준 중복 제거) — 값이 우연히 이전과 같아도 매번 갱신 이벤트가

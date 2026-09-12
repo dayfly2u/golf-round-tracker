@@ -25,14 +25,16 @@ class RoundRepository(private val roundDao: RoundDao) {
         holeNumber: Int,
         par: Int,
         strokesToGreen: Int,
-        strokesGreenToHoleOut: Int
+        strokesGreenToHoleOut: Int,
+        strokesPutt: Int
     ) = roundDao.upsertHoleRecord(
         HoleRecordEntity(
             roundId = roundId,
             holeNumber = holeNumber,
             par = par,
             strokesToGreen = strokesToGreen,
-            strokesGreenToHoleOut = strokesGreenToHoleOut
+            strokesGreenToHoleOut = strokesGreenToHoleOut,
+            strokesPutt = strokesPutt
         )
     )
 

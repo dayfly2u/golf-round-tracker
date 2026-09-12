@@ -115,12 +115,12 @@ fun RoundControlScreen(viewModel: RoundStateViewModel) {
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("숏게임: ${state.strokesGreenToHoleOut} ")
+            Text("퍼팅: ${state.strokesPutt} ")
             Button(
-                onClick = { viewModel.sendAction(WearSync.ACTION_DECREMENT_SHORT_GAME) },
-                enabled = state.strokesGreenToHoleOut > 0,
+                onClick = { viewModel.sendAction(WearSync.ACTION_DECREMENT_PUTT) },
+                enabled = state.strokesPutt > 0,
             ) { Text("-", fontSize = STROKE_BUTTON_TEXT_SIZE, fontWeight = FontWeight.Bold) }
-            Button(onClick = { viewModel.sendAction(WearSync.ACTION_INCREMENT_SHORT_GAME) }) {
+            Button(onClick = { viewModel.sendAction(WearSync.ACTION_INCREMENT_PUTT) }) {
                 Text("+", fontSize = STROKE_BUTTON_TEXT_SIZE, fontWeight = FontWeight.Bold)
             }
         }

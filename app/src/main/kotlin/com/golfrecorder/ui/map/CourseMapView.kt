@@ -22,14 +22,23 @@ import com.kakao.vectormap.shape.ShapeLayerOptions
 import com.kakao.vectormap.shape.ShapeLayerPass
 import kotlin.math.roundToInt
 
-data class ShotPoint(val phase: ShotPhase, val lat: Double, val lng: Double, val onGreen: Boolean = false)
+data class ShotPoint(val phase: ShotPhase, val lat: Double, val lng: Double)
 
 /** OB/해저드는 순수 벌타라 실제 '샷'이 아니다 — 선으로 연결하지 않고 위치만 표시한다. */
 data class PenaltyPoint(val type: PenaltyType, val lat: Double, val lng: Double)
 
-// ic_dot_red.png / ic_dot_blue.png와 동일한 색상 (선 색을 원 색상과 맞추기 위함).
+// ic_dot_red.png / ic_dot_blue.png / ic_dot_yellow.png와 동일한 색상 (선 색을 원 색상과 맞추기 위함).
 private const val SHOT_RED = "#E53935"
 private const val SHOT_BLUE = "#1E88E5"
+private const val SHOT_YELLOW = "#FFEB3B"
+
+// TO_GREEN(0) → SHORT_GAME(1) → PUTT(2) 순서로 진행된다고 본다 — 이 순서를
+// 거스르는(뒤로 가는) 구간은 절대 있을 수 없는 데이터라 선으로 잇지 않는다.
+private fun ShotPhase.order(): Int = when (this) {
+    ShotPhase.TO_GREEN -> 0
+    ShotPhase.SHORT_GAME -> 1
+    ShotPhase.PUTT -> 2
+}
 
 // 필드 테스트 결과 600m(레벨 18)로는 홀 전체가 화면에 안 들어오는 경우가 많아
 // 가로세로 약 1200m가 보이도록 한 단계 축소함 — 값이 높을수록 확대됨. 표준 웹
@@ -79,20 +88,25 @@ internal fun drawOverlays(
             PolygonOptions.from(MapPoints.fromLatLng(circleLatLngs), Color.parseColor(GREEN_FILL_COLOR))
         )
     }
-    // 빨강(그린까지)에서 파랑(숏게임/퍼팅)으로 이어지는 선은 어프로치 후 그린
-    // 주변으로 넘어가는 정상적인 연결이라 그린다. 하지만 그 반대 — 파랑에서
-    // 빨강으로 되돌아가는 선 — 은 절대 있을 수 없는 순서다(정상 데이터는 항상
-    // TO_GREEN 구간이 먼저, SHORT_GAME 구간이 나중). 홀 전환 중 위치 기록 경합
-    // 등으로 리스트에 이런 순서가 섞여 들어오더라도 지도에는 절대 그리지 않는다.
+    // 빨강(그린까지)→파랑(숏어프로치)→노랑(퍼팅) 순으로 이어지는 선은 정상적인
+    // 진행이라 그린다. 하지만 그 반대로 되돌아가는 선은 절대 있을 수 없는
+    // 순서다(정상 데이터는 항상 TO_GREEN → SHORT_GAME → PUTT 순으로만 진행).
+    // 홀 전환 중 위치 기록 경합 등으로 리스트에 이런 순서가 섞여 들어오더라도
+    // 지도에는 절대 그리지 않는다.
     val segments = (0 until shots.size - 1)
         .map { i -> shots[i] to shots[i + 1] }
-        .filterNot { (from, to) -> from.phase == ShotPhase.SHORT_GAME && to.phase == ShotPhase.TO_GREEN }
+        .filterNot { (from, to) -> to.phase.order() < from.phase.order() }
 
     if (segments.isNotEmpty()) {
         val toGreenLineStyle = PolylineStyle.from(5f, Color.parseColor(SHOT_RED))
         val shortGameLineStyle = PolylineStyle.from(5f, Color.parseColor(SHOT_BLUE))
+        val puttLineStyle = PolylineStyle.from(5f, Color.parseColor(SHOT_YELLOW))
         segments.forEach { (from, to) ->
-            val segmentStyle = if (from.phase == ShotPhase.TO_GREEN) toGreenLineStyle else shortGameLineStyle
+            val segmentStyle = when (from.phase) {
+                ShotPhase.TO_GREEN -> toGreenLineStyle
+                ShotPhase.SHORT_GAME -> shortGameLineStyle
+                ShotPhase.PUTT -> puttLineStyle
+            }
             val segmentPoints = MapPoints.fromLatLng(
                 listOf(LatLng.from(from.lat, from.lng), LatLng.from(to.lat, to.lng))
             )
@@ -108,15 +122,14 @@ internal fun drawOverlays(
     val shortGameStyles = map.labelManager?.addLabelStyles(
         LabelStyles.from("shot-short-game", LabelStyle.from(R.drawable.ic_dot_blue).setAnchorPoint(0.5f, 0.5f))
     )
-    // "그린 판별" 버튼을 눌러 그린 위(퍼팅)로 판정된 숏게임 샷만 노란 점으로 구분한다.
-    val shortGameOnGreenStyles = map.labelManager?.addLabelStyles(
-        LabelStyles.from("shot-short-game-on-green", LabelStyle.from(R.drawable.ic_dot_yellow).setAnchorPoint(0.5f, 0.5f))
+    val puttStyles = map.labelManager?.addLabelStyles(
+        LabelStyles.from("shot-putt", LabelStyle.from(R.drawable.ic_dot_yellow).setAnchorPoint(0.5f, 0.5f))
     )
     shots.forEach { shot ->
-        val styles = when {
-            shot.phase == ShotPhase.TO_GREEN -> toGreenStyles
-            shot.onGreen -> shortGameOnGreenStyles
-            else -> shortGameStyles
+        val styles = when (shot.phase) {
+            ShotPhase.TO_GREEN -> toGreenStyles
+            ShotPhase.SHORT_GAME -> shortGameStyles
+            ShotPhase.PUTT -> puttStyles
         }
         labelLayer.addLabel(LabelOptions.from(LatLng.from(shot.lat, shot.lng)).setStyles(styles))
     }

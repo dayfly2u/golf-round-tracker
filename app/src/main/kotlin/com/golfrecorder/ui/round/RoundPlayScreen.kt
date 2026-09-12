@@ -28,7 +28,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,7 +60,6 @@ import com.golfrecorder.service.RoundRecordingService
 import com.golfrecorder.ui.common.PenaltyStepper
 import com.golfrecorder.ui.common.StrokeStepper
 import com.golfrecorder.ui.map.CourseMapSlot
-import com.golfrecorder.ui.map.GreenClassifier
 import com.golfrecorder.ui.map.MapSlotState
 import com.golfrecorder.ui.map.PenaltyPoint
 import com.golfrecorder.ui.map.ShotPoint
@@ -106,7 +104,9 @@ class RoundPlayViewModel(
         private set
     var strokesToGreen by mutableStateOf(0)
         private set
-    var strokesGreenToHoleOut by mutableStateOf(0)
+    var strokesShortGame by mutableStateOf(0)
+        private set
+    var strokesPutt by mutableStateOf(0)
         private set
 
     private val shotsFlow = MutableStateFlow<List<ShotEntity>>(emptyList())
@@ -148,15 +148,16 @@ class RoundPlayViewModel(
         penaltiesCollectJob = viewModelScope.launch {
             penaltyRepository.getPenalties(roundId, holeNumber).collect { penaltiesFlow.value = it }
         }
-        // strokesToGreen/strokesGreenToHoleOut을 shots/penalties Flow로부터 계속
-        // 다시 계산한다(1회성 시드가 아님) — 워치가 이 홀의 shots/penalties를 바꿔도
-        // 이미 열려있는 폰 화면이 재진입 없이 곧바로 반영되게 하기 위해서다.
+        // strokesToGreen/strokesShortGame/strokesPutt을 shots/penalties Flow로부터
+        // 계속 다시 계산한다(1회성 시드가 아님) — 워치가 이 홀의 shots/penalties를
+        // 바꿔도 이미 열려있는 폰 화면이 재진입 없이 곧바로 반영되게 하기 위해서다.
         strokeTotalsJob?.cancel()
         strokeTotalsJob = viewModelScope.launch {
             combine(shotsFlow, penaltiesFlow) { shots, penalties -> shots to penalties }
                 .collect { (shots, penalties) ->
                     strokesToGreen = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.TO_GREEN)
-                    strokesGreenToHoleOut = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.SHORT_GAME)
+                    strokesShortGame = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.SHORT_GAME)
+                    strokesPutt = StrokeCalculator.currentTotal(shots, penalties, ShotPhase.PUTT)
                     // 홀에 들어오는 즉시, 그리고 이후 값이 바뀔 때마다 hole_records에
                     // 반영해둔다 — 한 타도 안 치고 바로 뒤로 나가도 라운드 결과(요약)
                     // 화면의 홀 목록에 그 홀이 바로 보여야 "코스를 고른 순간 라운드가
@@ -167,7 +168,9 @@ class RoundPlayViewModel(
                     if (!isReview && roundRepository.getCurrentHoleNumber(roundId) != null) {
                         val par = courseRepository.getCourseWithHoles(courseId).first()
                             ?.holes?.find { it.holeNumber == holeNumber }?.par ?: 4
-                        roundRepository.saveHoleRecord(roundId, holeNumber, par, strokesToGreen, strokesGreenToHoleOut)
+                        roundRepository.saveHoleRecord(
+                            roundId, holeNumber, par, strokesToGreen, strokesShortGame + strokesPutt, strokesPutt,
+                        )
                     }
                 }
         }
@@ -195,7 +198,9 @@ class RoundPlayViewModel(
     private fun saveCurrentHole(after: () -> Unit) {
         val par = holes.value.find { it.holeNumber == currentHoleNumber }?.par ?: 4
         viewModelScope.launch {
-            roundRepository.saveHoleRecord(roundId, currentHoleNumber, par, strokesToGreen, strokesGreenToHoleOut)
+            roundRepository.saveHoleRecord(
+                roundId, currentHoleNumber, par, strokesToGreen, strokesShortGame + strokesPutt, strokesPutt,
+            )
             after()
         }
     }
@@ -222,15 +227,16 @@ class RoundPlayViewModel(
      * 늘어나는지 받는다 — 다만 "OB 몇 번 났는지"는 항상 1건으로 센다(벌타 크기와
      * 무관하게 penalties 테이블에는 한 행만 추가).
      * GPS를 못 잡으면(lat/lng == null) onStepperChange의 일반 샷과 동일하게 이 벌타
-     * 자체를 기록하지 않는다 — strokesToGreen/strokesGreenToHoleOut이 이제 DB의
-     * shots/penalties에서 매번 다시 계산되는 값이라, DB에 쓰이지 않은 변화를 메모리에만
-     * 남겨둘 방법이 없다.
+     * 자체를 기록하지 않는다 — strokesToGreen/strokesShortGame/strokesPutt이 이제
+     * DB의 shots/penalties에서 매번 다시 계산되는 값이라, DB에 쓰이지 않은 변화를
+     * 메모리에만 남겨둘 방법이 없다.
      */
     fun addPenalty(holeNumber: Int, phase: ShotPhase, type: PenaltyType, strokeCount: Int, lat: Double?, lng: Double?, onDone: () -> Unit = {}) {
         if (lat != null && lng != null) {
             val newValue = when (phase) {
                 ShotPhase.TO_GREEN -> strokesToGreen + strokeCount
-                ShotPhase.SHORT_GAME -> strokesGreenToHoleOut + strokeCount
+                ShotPhase.SHORT_GAME -> strokesShortGame + strokeCount
+                ShotPhase.PUTT -> strokesPutt + strokeCount
             }
             viewModelScope.launch {
                 penaltyRepository.addPenalty(
@@ -252,20 +258,6 @@ class RoundPlayViewModel(
         viewModelScope.launch {
             penaltyRepository.removePenalty(roundId, holeNumber, phase, type, last.penaltyIndex)
             onDone()
-        }
-    }
-
-    fun setGreenLocation(lat: Double, lng: Double) {
-        val holeId = holes.value.find { it.holeNumber == currentHoleNumber }?.id ?: return
-        viewModelScope.launch {
-            courseRepository.updateGreenLocation(holeId, lat, lng)
-        }
-    }
-
-    fun resetGreenLocation() {
-        val holeId = holes.value.find { it.holeNumber == currentHoleNumber }?.id ?: return
-        viewModelScope.launch {
-            courseRepository.clearGreenLocation(holeId)
         }
     }
 }
@@ -364,10 +356,6 @@ fun RoundPlayScreen(
 
     var showFinishConfirm by remember { mutableStateOf(false) }
     var recenterSignal by remember { mutableStateOf(0) }
-    // "그린 판별" 버튼으로 채워지는, 그린 위로 판정된 숏게임 샷의 shotIndex 집합.
-    // 홀이 바뀌면 당연히 초기화돼야 하므로 currentHoleNumber를 remember 키로 쓴다.
-    val classifiedOnGreen = remember(viewModel.currentHoleNumber) { mutableStateMapOf<Int, Boolean>() }
-    var isClassifying by remember(viewModel.currentHoleNumber) { mutableStateOf(false) }
     fun recenterOnCurrentLocation() {
         scope.launch {
             val loc = LocationCapture.getCurrentLocation(context)
@@ -447,74 +435,9 @@ fun RoundPlayScreen(
         ) {
             val fixedLocation = currentLocation
             val showRecenterButton = !viewModel.isReview && hasLocationPermission && online
-            // 이미 끝난 라운드를 리뷰할 때는 핀을 새로 지정할 일이 없으니(리뷰하는
-            // 사람의 GPS 위치도 그 홀과 무관) 핀 관련 안내/버튼을 아예 보여주지 않는다.
-            if (greenLocation == null && !viewModel.isReview) {
-                if (online) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "그린에서 정확한 핀위치를 지정해주세요",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        if (showRecenterButton) {
-                            TextButton(onClick = { recenterOnCurrentLocation() }) { Text("위치 조정") }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
-            } else if (greenLocation != null && !viewModel.isReview) {
-                // 이미 끝난 라운드를 리뷰할 때는 이 홀의 핀 위치를 새로 바꿀 일이 없으니
-                // "핀위치가 설정되었습니다" 안내와 "핀 재지정" 버튼 모두 의미가 없다.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "핀위치가 설정되었습니다",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Row {
-                        TextButton(onClick = { viewModel.resetGreenLocation() }) { Text("핀 재지정") }
-                        if (showRecenterButton) {
-                            TextButton(onClick = { recenterOnCurrentLocation() }) { Text("위치 조정") }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-            // 숏게임+퍼팅 구간의 각 샷이 그린 위(퍼팅)였는지 밖(칩)이었는지는 입력
-            // 단계에서 구분하지 않으므로, 눌렀을 때만 위성사진 색으로 추정해서 지도
-            // 점 색을 나눠준다 — 네트워크를 타는 작업이라 자동 실행하지 않는다.
-            if (online && shots.any { it.phase == ShotPhase.SHORT_GAME.name }) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    TextButton(
-                        enabled = !isClassifying,
-                        onClick = {
-                            scope.launch {
-                                isClassifying = true
-                                val toGreenShots = shots.filter { it.phase == ShotPhase.TO_GREEN.name }
-                                val shortGameShots = shots.filter { it.phase == ShotPhase.SHORT_GAME.name }
-                                val result = GreenClassifier.classifyShortGameShots(toGreenShots, shortGameShots)
-                                isClassifying = false
-                                if (result.isEmpty()) {
-                                    Toast.makeText(context, "그린 판별에 실패했습니다. 다시 시도해주세요", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    classifiedOnGreen.clear()
-                                    classifiedOnGreen.putAll(result)
-                                }
-                            }
-                        },
-                    ) { Text(if (isClassifying) "판별 중..." else "그린 판별") }
+            if (showRecenterButton) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { recenterOnCurrentLocation() }) { Text("위치 조정") }
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -525,16 +448,10 @@ fun RoundPlayScreen(
                     cameraKey = "round-${viewModel.roundId}-hole-${viewModel.currentHoleNumber}",
                     greenLocation = greenLocation,
                     currentLocation = fixedLocation,
-                    // shotIndex는 phase 안에서만 고유해서(TO_GREEN/SHORT_GAME이 각각
-                    // 1부터 매겨진다) phase를 같이 확인해야 한다 — 안 그러면 번호가
-                    // 우연히 겹치는 TO_GREEN 샷이 노랗게 칠해진다.
-                    shots = shots.map { shot ->
-                        val onGreen = shot.phase == ShotPhase.SHORT_GAME.name && classifiedOnGreen[shot.shotIndex] == true
-                        ShotPoint(ShotPhase.valueOf(shot.phase), shot.lat, shot.lng, onGreen = onGreen)
-                    },
+                    shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
                     penalties = penalties.map { PenaltyPoint(PenaltyType.valueOf(it.type), it.lat, it.lng) },
-                    tapToSetGreen = greenLocation == null && !viewModel.isReview,
-                    onGreenTap = { tapped -> viewModel.setGreenLocation(tapped.lat, tapped.lng) },
+                    tapToSetGreen = false,
+                    onGreenTap = {},
                     recenterSignal = recenterSignal,
                     preferCurrentLocation = !viewModel.isReview,
                 )
@@ -547,7 +464,6 @@ fun RoundPlayScreen(
                     )
                     Text("오프라인 - 그린까지 약 ${distance.toInt()}m")
                 }
-                greenLocation == null -> Text("그린 위치 미설정 (온라인에서 설정 필요)")
                 else -> Text("오프라인 상태입니다.")
             }
             // OB/해저드는 그린까지 가는 구간에서만 일어난다고 보고 숏게임에는 두지 않는다.
@@ -566,16 +482,7 @@ fun RoundPlayScreen(
                 Spacer(Modifier.height(4.dp))
                 Text("OB ${obToGreenCount}회 · 해저드 ${hazardToGreenCount}회")
                 Spacer(Modifier.height(4.dp))
-                // "그린 판별"을 눌러 숏게임 샷별로 그린 위/밖이 갈리면, 합산된 숫자
-                // 대신 칩(그린 밖)/퍼팅(그린 위) 개수를 따로 보여준다 — 판별 전에는
-                // 기존처럼 합산 숫자만 보여준다.
-                if (classifiedOnGreen.isNotEmpty()) {
-                    val puttCount = classifiedOnGreen.values.count { it }
-                    val chipCount = classifiedOnGreen.size - puttCount
-                    Text("숏게임 ${chipCount} · 퍼팅 ${puttCount}")
-                } else {
-                    Text("숏게임+퍼팅: ${viewModel.strokesGreenToHoleOut}")
-                }
+                Text("숏어프로치 ${viewModel.strokesShortGame} · 퍼팅 ${viewModel.strokesPutt}")
             } else {
                 StrokeStepper(
                     label = "그린까지 타수",
@@ -613,11 +520,20 @@ fun RoundPlayScreen(
                 }
                 Spacer(Modifier.height(16.dp))
                 StrokeStepper(
-                    label = "숏게임+퍼팅",
-                    value = viewModel.strokesGreenToHoleOut,
+                    label = "숏어프로치",
+                    value = viewModel.strokesShortGame,
                     onValueChange = { newValue ->
-                        val old = viewModel.strokesGreenToHoleOut
+                        val old = viewModel.strokesShortGame
                         onStepperChange(ShotPhase.SHORT_GAME, old, newValue)
+                    },
+                )
+                Spacer(Modifier.height(4.dp))
+                StrokeStepper(
+                    label = "퍼팅",
+                    value = viewModel.strokesPutt,
+                    onValueChange = { newValue ->
+                        val old = viewModel.strokesPutt
+                        onStepperChange(ShotPhase.PUTT, old, newValue)
                     },
                 )
             }

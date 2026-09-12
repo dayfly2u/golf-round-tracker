@@ -21,7 +21,7 @@ data class RoundUiState(
     val holeNumber: Int = 1,
     val par: Int = 4,
     val strokesToGreen: Int = 0,
-    val strokesGreenToHoleOut: Int = 0,
+    val strokesPutt: Int = 0,
     val holeCount: Int = 18,
     /** 최근에 GPS를 못 잡아 버튼 입력이 기록되지 않은 시각(epoch ms), 없으면 0. */
     val lastFailedAt: Long = 0L,
@@ -76,7 +76,7 @@ class RoundStateViewModel(application: Application) :
             holeNumber = map.getInt(WearSync.KEY_HOLE_NUMBER, 1),
             par = map.getInt(WearSync.KEY_PAR, 4),
             strokesToGreen = map.getInt(WearSync.KEY_STROKES_TO_GREEN, 0),
-            strokesGreenToHoleOut = map.getInt(WearSync.KEY_STROKES_SHORT_GAME, 0),
+            strokesPutt = map.getInt(WearSync.KEY_STROKES_PUTT, 0),
             holeCount = map.getInt(WearSync.KEY_HOLE_COUNT, 18),
             lastFailedAt = map.getLong(WearSync.KEY_LAST_FAILED_AT, 0L),
         )

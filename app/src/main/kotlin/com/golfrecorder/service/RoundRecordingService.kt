@@ -101,8 +101,8 @@ class RoundRecordingService : Service() {
         when (action) {
             WearSync.ACTION_INCREMENT_TO_GREEN -> incrementStroke(holeNumber, ShotPhase.TO_GREEN)
             WearSync.ACTION_DECREMENT_TO_GREEN -> decrementStroke(holeNumber, ShotPhase.TO_GREEN)
-            WearSync.ACTION_INCREMENT_SHORT_GAME -> incrementStroke(holeNumber, ShotPhase.SHORT_GAME)
-            WearSync.ACTION_DECREMENT_SHORT_GAME -> decrementStroke(holeNumber, ShotPhase.SHORT_GAME)
+            WearSync.ACTION_INCREMENT_PUTT -> incrementStroke(holeNumber, ShotPhase.PUTT)
+            WearSync.ACTION_DECREMENT_PUTT -> decrementStroke(holeNumber, ShotPhase.PUTT)
             WearSync.ACTION_NEXT_HOLE -> changeHole(holeNumber + 1)
             WearSync.ACTION_PREV_HOLE -> changeHole(holeNumber - 1)
         }
@@ -163,8 +163,8 @@ class RoundRecordingService : Service() {
                     StrokeCalculator.currentTotal(shots, penalties, ShotPhase.TO_GREEN),
                 )
                 dataMap.putInt(
-                    WearSync.KEY_STROKES_SHORT_GAME,
-                    StrokeCalculator.currentTotal(shots, penalties, ShotPhase.SHORT_GAME),
+                    WearSync.KEY_STROKES_PUTT,
+                    StrokeCalculator.currentTotal(shots, penalties, ShotPhase.PUTT),
                 )
             }
         }.setUrgent()
