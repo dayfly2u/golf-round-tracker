@@ -20,7 +20,9 @@ import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.location.LocationCapture
 import com.golfrecorder.location.LocationTracker
 import com.golfrecorder.wearsync.WearSync
-import com.google.android.gms.wearable.MessageClient
+import com.google.android.gms.wearable.DataClient
+import com.google.android.gms.wearable.DataEvent
+import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +32,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -42,17 +46,52 @@ class RoundRecordingService : Service() {
     // 워치에서 누른 버튼이 GPS를 못 잡아 기록되지 않았을 때, 그 시각을 남겨뒀다가
     // pushState()에서 워치로 실어 보낸다(워치는 이 값이 바뀌면 진동으로 알려준다).
     private var lastFailedAt: Long = 0L
+    // 큐에 쌓인 DataItem들을 시퀀스(경로 접미사) 순서대로, 반드시 하나씩 순서대로
+    // 처리하기 위한 잠금 — onDataChanged가 여러 번 겹쳐 호출돼도 increment/decrement가
+    // 뒤섞여 적용되지 않도록 한다.
+    private val actionQueueMutex = Mutex()
 
-    private val messageListener = MessageClient.OnMessageReceivedListener { event ->
-        if (event.path != WearSync.ACTION_PATH) return@OnMessageReceivedListener
-        val payload = String(event.data, Charsets.UTF_8)
-        serviceScope.launch { handleAction(payload) }
+    private val dataListener = DataClient.OnDataChangedListener { events ->
+        val pending = mutableListOf<Triple<Long, android.net.Uri, com.google.android.gms.wearable.DataMap>>()
+        for (event in events) {
+            if (event.type != DataEvent.TYPE_CHANGED) continue
+            val uri = event.dataItem.uri
+            val path = uri.path.orEmpty()
+            if (!path.startsWith(WearSync.ACTION_QUEUE_PATH_PREFIX)) continue
+            val seq = path.substringAfterLast('/').toLongOrNull() ?: continue
+            pending.add(Triple(seq, uri, DataMapItem.fromDataItem(event.dataItem).dataMap))
+        }
+        events.release()
+        if (pending.isEmpty()) return@OnDataChangedListener
+        pending.sortBy { it.first }
+        serviceScope.launch {
+            actionQueueMutex.withLock {
+                for ((_, uri, map) in pending) {
+                    val action = map.getString(WearSync.KEY_QUEUED_ACTION)
+                    if (action != null) {
+                        val hasLat = map.containsKey(WearSync.KEY_QUEUED_LAT)
+                        val hasLng = map.containsKey(WearSync.KEY_QUEUED_LNG)
+                        val watchLocation = if (hasLat && hasLng) {
+                            AppLatLng(map.getDouble(WearSync.KEY_QUEUED_LAT), map.getDouble(WearSync.KEY_QUEUED_LNG))
+                        } else {
+                            null
+                        }
+                        handleAction(action, watchLocation)
+                    }
+                    try {
+                        Wearable.getDataClient(this@RoundRecordingService).deleteDataItems(uri).await()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "deleteDataItems FAILED uri=$uri", e)
+                    }
+                }
+            }
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
         container = AppContainer.getInstance(applicationContext)
-        Wearable.getMessageClient(this).addListener(messageListener)
+        Wearable.getDataClient(this).addListener(dataListener)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
     }
@@ -83,7 +122,7 @@ class RoundRecordingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        Wearable.getMessageClient(this).removeListener(messageListener)
+        Wearable.getDataClient(this).removeListener(dataListener)
         LocationTracker.stop(applicationContext)
         // 스코프를 취소하기 전에 "라운드 종료" 상태가 실제로 전송 완료(혹은 타임아웃)되도록
         // 기다린다 — serviceScope.launch { ... }로 던지고 바로 cancel()하면 코루틴이
@@ -97,20 +136,9 @@ class RoundRecordingService : Service() {
         super.onDestroy()
     }
 
-    private suspend fun handleAction(payload: String) {
+    private suspend fun handleAction(action: String, watchLocation: AppLatLng?) {
         if (roundId <= 0 || courseId <= 0) return
         val holeNumber = container.roundRepository.getCurrentHoleNumber(roundId) ?: return
-        // "ACTION" 또는 "ACTION|위도|경도" — 뒤의 좌표는 이 라운드가 워치 GPS를
-        // 기준으로 쓸 때만 INCREMENT_* 액션에 붙어 온다(WearSync.ACTION_PATH 참고).
-        val parts = payload.split("|")
-        val action = parts[0]
-        val watchLocation = if (parts.size == 3) {
-            val lat = parts[1].toDoubleOrNull()
-            val lng = parts[2].toDoubleOrNull()
-            if (lat != null && lng != null) AppLatLng(lat, lng) else null
-        } else {
-            null
-        }
         when (action) {
             WearSync.ACTION_INCREMENT_TO_GREEN -> incrementStroke(holeNumber, ShotPhase.TO_GREEN, watchLocation)
             WearSync.ACTION_DECREMENT_TO_GREEN -> decrementStroke(holeNumber, ShotPhase.TO_GREEN)

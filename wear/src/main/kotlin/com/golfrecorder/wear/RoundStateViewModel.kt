@@ -10,6 +10,7 @@ import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataItemBuffer
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.DataMapItem
+import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,8 +39,6 @@ class RoundStateViewModel(application: Application) :
     val state: StateFlow<RoundUiState> = _state
 
     private val dataClient = Wearable.getDataClient(application)
-    private val messageClient = Wearable.getMessageClient(application)
-    private val nodeClient = Wearable.getNodeClient(application)
 
     init {
         dataClient.addListener(this)
@@ -92,26 +91,31 @@ class RoundStateViewModel(application: Application) :
         action == WearSync.ACTION_INCREMENT_TO_GREEN || action == WearSync.ACTION_INCREMENT_PUTT
 
     fun sendAction(action: String) {
-        // 이 라운드가 워치 기준이면 워치가 캐시해둔 최신 좌표를 액션에 붙여 보낸다
-        // ("ACTION|위도|경도", WearSync.ACTION_PATH 참고). 아직 첫 fix를 못 받았으면
-        // 좌표 없이 보내고 — 폰 쪽이 그걸 실패로 기록해 진동으로 알려준다(카트에 둔
-        // 폰 위치로 조용히 대체하는 것보다 낫다).
-        val payload = if (needsLocation(action) && _state.value.useWatchLocation) {
-            val loc = WatchLocationService.latestLocation()
-            if (loc != null) "$action|${loc.first}|${loc.second}" else action
+        // DataItem 큐에 넣는다 — MessageClient(옛 방식)는 그 순간 폰과 블루투스가
+        // 연결돼 있어야만 전달되고 끊겨 있으면 조용히 실패했지만, DataItem은 로컬에
+        // 저장됐다가 재연결되면 자동으로 동기화된다. 경로에 타임스탬프를 붙여 액션마다
+        // 고유하게 만드는 이유는, 같은 경로로 여러 번 보내면 나중 값이 이전 값을
+        // 덮어써서 그 사이에 눌렀던 액션들이 통째로 사라지기 때문이다(WearSync 참고).
+        val loc = if (needsLocation(action) && _state.value.useWatchLocation) {
+            WatchLocationService.latestLocation()
         } else {
-            action
+            null
         }
         viewModelScope.launch {
             try {
-                val nodes = nodeClient.connectedNodes.await()
-                Log.d(TAG, "sendAction($payload) connectedNodes=${nodes.size}: ${nodes.map { it.displayName + "/" + it.id }}")
-                for (node in nodes) {
-                    messageClient.sendMessage(node.id, WearSync.ACTION_PATH, payload.toByteArray(Charsets.UTF_8)).await()
-                    Log.d(TAG, "sendAction($payload) sent to ${node.id}")
-                }
+                val request = PutDataMapRequest.create(
+                    "${WearSync.ACTION_QUEUE_PATH_PREFIX}/${System.currentTimeMillis()}",
+                ).apply {
+                    dataMap.putString(WearSync.KEY_QUEUED_ACTION, action)
+                    if (loc != null) {
+                        dataMap.putDouble(WearSync.KEY_QUEUED_LAT, loc.first)
+                        dataMap.putDouble(WearSync.KEY_QUEUED_LNG, loc.second)
+                    }
+                }.asPutDataRequest().setUrgent()
+                val result = dataClient.putDataItem(request).await()
+                Log.d(TAG, "sendAction($action) queued uri=${result.uri}")
             } catch (e: Exception) {
-                Log.e(TAG, "sendAction($payload) FAILED", e)
+                Log.e(TAG, "sendAction($action) FAILED", e)
             }
         }
     }

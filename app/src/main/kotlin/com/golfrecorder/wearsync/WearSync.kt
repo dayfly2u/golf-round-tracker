@@ -7,12 +7,19 @@ package com.golfrecorder.wearsync
  * 그대로 복제해서 둔다 — 한쪽만 고치면 통신이 깨지니 항상 같이 수정할 것.
  */
 object WearSync {
-    /** 워치 → 폰: 버튼 입력 명령. MessageClient, payload는 UTF-8 문자열이며 형식은
-     * "ACTION" 또는 "ACTION|위도|경도" 두 가지다 — 이 라운드가 워치 GPS를 위치
-     * 기준으로 쓸 때만(KEY_USE_WATCH_LOCATION=true) INCREMENT_* 액션에 그 순간
-     * 워치가 갖고 있던 좌표를 붙여 보낸다. DECREMENT_* 액션이나 홀 이동 액션은
-     * 위치가 필요 없어 좌표를 붙이지 않는다. */
-    const val ACTION_PATH = "/stroke/action"
+    /** 워치 → 폰: 버튼 입력 명령 큐. DataClient DataItem이며 경로는
+     * "ACTION_QUEUE_PATH_PREFIX/{시퀀스}" 형태로 액션마다 고유하게 만든다.
+     * MessageClient(옛 방식)는 그 순간 연결돼 있어야만 전달되고, 끊겨 있으면
+     * 조용히 실패했다 — 골프장에서는 폰-워치 블루투스 거리가 종종 끊길 수 있어서
+     * (특히 "워치 GPS 켜기"를 쓸 만큼 폰을 멀리 둔 상황일수록 더), DataItem 큐로
+     * 바꿔서 끊긴 동안 눌러도 재연결되면 순서대로(시퀀스 오름차순) 전달되게 한다.
+     * DataMap 키는 KEY_QUEUED_ACTION(문자열), 위치가 필요한 액션(INCREMENT_*,
+     * 이 라운드가 워치 GPS 기준일 때만)은 KEY_QUEUED_LAT/KEY_QUEUED_LNG도 같이
+     * 싣는다. 폰이 처리한 뒤에는 그 DataItem을 지운다(재처리/무한 누적 방지). */
+    const val ACTION_QUEUE_PATH_PREFIX = "/stroke/action-queue"
+    const val KEY_QUEUED_ACTION = "action"
+    const val KEY_QUEUED_LAT = "lat"
+    const val KEY_QUEUED_LNG = "lng"
 
     /** 폰 → 워치: 최신 라운드 상태. DataClient DataMap. */
     const val STATE_PATH = "/round-state"
