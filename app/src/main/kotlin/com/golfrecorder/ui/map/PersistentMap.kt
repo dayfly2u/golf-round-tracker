@@ -63,8 +63,6 @@ internal class MapRequest(
     val currentLocation: AppLatLng?,
     val shots: List<ShotPoint>,
     val penalties: List<PenaltyPoint>,
-    val tapToSetGreen: Boolean,
-    val onGreenTap: (AppLatLng) -> Unit,
     /** 0보다 크게 바뀔 때마다 그린/타수 상태와 무관하게 지도를 [currentLocation]으로
      * 강제 이동시킨다 — "위치 조정" 버튼용. 값 자체는 의미 없고 변경 여부만 쓴다. */
     val recenterSignal: Int = 0,
@@ -113,8 +111,6 @@ fun CourseMapSlot(
     currentLocation: AppLatLng?,
     shots: List<ShotPoint>,
     penalties: List<PenaltyPoint>,
-    tapToSetGreen: Boolean,
-    onGreenTap: (AppLatLng) -> Unit,
     modifier: Modifier = Modifier,
     recenterSignal: Int = 0,
     preferCurrentLocation: Boolean = true,
@@ -133,11 +129,6 @@ fun CourseMapSlot(
             }
     )
 
-    // 콜백은 매 recomposition마다 인스턴스가 바뀌므로 갱신 키에서 제외하고,
-    // 항상 최신 콜백으로 위임하는 안정적인 래퍼를 대신 넘긴다.
-    val latestOnGreenTap by rememberUpdatedState(onGreenTap)
-    val stableOnGreenTap = remember { { tapped: AppLatLng -> latestOnGreenTap(tapped) } }
-
     val currentOffset = offset
     LaunchedEffect(
         currentOffset,
@@ -147,7 +138,6 @@ fun CourseMapSlot(
         currentLocation,
         shots,
         penalties,
-        tapToSetGreen,
         recenterSignal,
         preferCurrentLocation,
     ) {
@@ -161,8 +151,6 @@ fun CourseMapSlot(
                     currentLocation = currentLocation,
                     shots = shots,
                     penalties = penalties,
-                    tapToSetGreen = tapToSetGreen,
-                    onGreenTap = stableOnGreenTap,
                     recenterSignal = recenterSignal,
                     preferCurrentLocation = preferCurrentLocation,
                 )
@@ -226,21 +214,6 @@ fun PersistentCourseMap(state: MapSlotState) {
                     object : KakaoMapReadyCallback() {
                         override fun onMapReady(map: KakaoMap) {
                             map.changeMapType(MapType.SKYVIEW)
-                            map.setOnMapClickListener { clickedMap, position, screenPoint, _ ->
-                                // 리스너는 한 번만 등록되므로, 캡처한 값이 아니라 지금 화면의
-                                // 요청을 그때그때 읽어야 한다.
-                                val active = state.request
-                                if (active != null && active.tapToSetGreen) {
-                                    // position은 팬(pan) 이후 최신 카메라 상태를 반영하지 못하는
-                                    // 경우가 있어, 실제 스크린 픽셀 좌표(screenPoint)로 직접
-                                    // 재변환한 좌표를 우선 사용한다.
-                                    val resolved = clickedMap.fromScreenPoint(
-                                        screenPoint.x.toInt(),
-                                        screenPoint.y.toInt(),
-                                    ) ?: position
-                                    active.onGreenTap(AppLatLng(resolved.latitude, resolved.longitude))
-                                }
-                            }
                             kakaoMapState.value = map
                         }
                     },

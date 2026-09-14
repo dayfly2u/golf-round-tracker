@@ -450,8 +450,6 @@ fun RoundPlayScreen(
                     currentLocation = fixedLocation,
                     shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
                     penalties = penalties.map { PenaltyPoint(PenaltyType.valueOf(it.type), it.lat, it.lng) },
-                    tapToSetGreen = false,
-                    onGreenTap = {},
                     recenterSignal = recenterSignal,
                     preferCurrentLocation = !viewModel.isReview,
                 )
