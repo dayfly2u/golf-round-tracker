@@ -1,13 +1,17 @@
 package com.golfrecorder.wear
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.MaterialTheme
@@ -76,6 +81,35 @@ fun RoundControlScreen(viewModel: RoundStateViewModel) {
             vibrateFailure(context)
         }
         lastSeenFailedAt = state.lastFailedAt
+    }
+
+    // 이 라운드가 "워치 기준"일 때만 워치 자체 GPS가 필요하다 — 앱을 열 때마다
+    // 무조건 권한을 묻지 않고, 실제로 필요한 순간(워치 기준 라운드 진행 중)에만
+    // 묻는다.
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> hasLocationPermission = granted }
+
+    LaunchedEffect(state.roundActive, state.useWatchLocation, hasLocationPermission) {
+        if (state.roundActive && state.useWatchLocation && !hasLocationPermission) {
+            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+    // 폰의 RoundPlayScreen이 RoundRecordingService를 시작/정지하는 것과 같은 모양 —
+    // 라운드가 살아있고 워치 기준이며 권한이 있을 때만 포그라운드 GPS 서비스를 띄운다.
+    LaunchedEffect(state.roundActive, state.useWatchLocation, hasLocationPermission) {
+        if (state.roundActive && state.useWatchLocation && hasLocationPermission) {
+            WatchLocationService.start(context)
+        } else {
+            WatchLocationService.stop(context)
+        }
     }
 
     Column(
