@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -37,8 +38,10 @@ import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.golfrecorder.wearsync.WearSync
+import kotlinx.coroutines.delay
 
 private const val FAIL_VIBRATION_MS = 200L
+private const val GPS_FAILURE_MESSAGE_MS = 2500L
 
 private fun vibrateFailure(context: Context) {
     val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -72,13 +75,17 @@ fun RoundControlScreen(viewModel: RoundStateViewModel) {
     val context = LocalContext.current
 
     // 폰 화면의 "위치를 가져오지 못해 기록되지 않았습니다" Toast와 같은 의도 — 워치는
-    // 화면이 작아 텍스트 대신 진동으로 알려준다. 처음 값을 받을 때는(baseline) 진동시키지
-    // 않고, 그 뒤에 값이 갱신될 때만(=새로운 실패) 진동시킨다.
+    // 화면이 작아 텍스트 대신 진동 + 잠깐 뜨는 안내 문구로 알려준다. 처음 값을 받을
+    // 때는(baseline) 반응하지 않고, 그 뒤에 값이 갱신될 때만(=새로운 실패) 반응한다.
     var lastSeenFailedAt by remember { mutableStateOf<Long?>(null) }
+    var showGpsFailureMessage by remember { mutableStateOf(false) }
     LaunchedEffect(state.lastFailedAt) {
         val seen = lastSeenFailedAt
         if (seen != null && state.lastFailedAt > seen) {
             vibrateFailure(context)
+            showGpsFailureMessage = true
+            delay(GPS_FAILURE_MESSAGE_MS)
+            showGpsFailureMessage = false
         }
         lastSeenFailedAt = state.lastFailedAt
     }
@@ -123,6 +130,15 @@ fun RoundControlScreen(viewModel: RoundStateViewModel) {
                 textAlign = TextAlign.Center,
             )
             return@Column
+        }
+
+        if (showGpsFailureMessage) {
+            Text(
+                "GPS 신호 없음",
+                color = Color.Red,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+            )
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
