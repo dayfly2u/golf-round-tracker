@@ -18,6 +18,9 @@
         android:label="@string/app_name"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${googleMapsApiKey}" />
         <service
             android:name=".service.RoundRecordingService"
             android:exported="false"

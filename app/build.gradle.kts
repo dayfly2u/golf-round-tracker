@@ -21,7 +21,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 6
-        versionName = "0.6.1"
+        versionName = "0.6.2"
 
         buildConfigField(
             "String",
@@ -33,6 +33,8 @@ android {
             "YOUTUBE_API_KEY",
             "\"${localProperties.getProperty("youtube.api.key", "")}\"",
         )
+        manifestPlaceholders["googleMapsApiKey"] =
+            localProperties.getProperty("google.maps.api.key", "")
     }
 
     buildTypes {
@@ -75,6 +77,7 @@ dependencies {
     implementation(libs.kakao.maps.sdk)
     implementation(libs.play.services.location)
     implementation(libs.play.services.wearable)
+    implementation(libs.play.services.maps)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.retrofit.core)
