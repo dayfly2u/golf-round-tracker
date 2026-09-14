@@ -39,7 +39,13 @@ class WatchLocationService : Service() {
         startTracking()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    // START_STICKY를 쓰면 시스템이 이 서비스를 죽였다가 나중에 intent 없이
+    // 재시작시킬 수 있는데, 그 경우 어느 라운드였는지도 useWatchLocation이었는지도
+    // 알 방법 없이 GPS만 계속 폴링하는 "좀비" 서비스가 된다(폰의 RoundRecordingService
+    // 에서 실제로 겪었던 문제와 동일). 라운드가 다시 필요하면 MainActivity의
+    // LaunchedEffect가 유효한 상태로 다시 start()를 호출하므로, 자동 재시작에
+    // 의존하지 않는 게 더 안전하다.
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
 
     override fun onBind(intent: Intent?): IBinder? = null
 
