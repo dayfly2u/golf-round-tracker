@@ -128,7 +128,14 @@ fun CourseSelectScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("와치 GPS 켜기", fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("와치 GPS 켜기", fontWeight = FontWeight.Bold)
+                    Text(
+                        " (꺼져있으면 핸드폰 GPS 사용)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
                 Switch(checked = useWatchLocation, onCheckedChange = { setUseWatchLocation(it) })
             }
             HorizontalDivider()
