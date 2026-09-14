@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -127,23 +128,8 @@ fun CourseSelectScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("위치 기준", fontWeight = FontWeight.Bold)
-                Row {
-                    TextButton(onClick = { setUseWatchLocation(false) }) {
-                        Text(
-                            "폰",
-                            fontWeight = if (!useWatchLocation) FontWeight.Bold else FontWeight.Normal,
-                            color = if (!useWatchLocation) MaterialTheme.colorScheme.primary else Color.Unspecified,
-                        )
-                    }
-                    TextButton(onClick = { setUseWatchLocation(true) }) {
-                        Text(
-                            "와치",
-                            fontWeight = if (useWatchLocation) FontWeight.Bold else FontWeight.Normal,
-                            color = if (useWatchLocation) MaterialTheme.colorScheme.primary else Color.Unspecified,
-                        )
-                    }
-                }
+                Text("와치 GPS 켜기", fontWeight = FontWeight.Bold)
+                Switch(checked = useWatchLocation, onCheckedChange = { setUseWatchLocation(it) })
             }
             HorizontalDivider()
             if (courses.isEmpty()) {
