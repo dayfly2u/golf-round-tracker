@@ -43,15 +43,18 @@ import kotlin.math.roundToInt
  */
 val MAP_HEIGHT = 380.dp
 
-/** 지도를 쓰지 않는 화면일 때 지도 뷰를 치워둘 위치(화면 훨씬 아래). */
-private const val HIDDEN_OFFSET_Y = 10_000
+/** 지도를 쓰지 않는 화면일 때 지도 뷰를 치워둘 위치(화면 훨씬 아래).
+ * PersistentGoogleMap(GooglePersistentMap.kt)도 같은 값을 참조한다 — Kotlin의
+ * top-level `private`는 파일 단위 가시성이라 패키지가 같아도 다른 파일에서는 못
+ * 보므로 `internal`로 둔다. */
+internal const val HIDDEN_OFFSET_Y = 10_000
 
 /** 리뷰 모드에서 그 홀의 샷(+그린)을 전부 보여줄 때 화면 가장자리에 둘 여백. */
-private val MAP_FIT_PADDING = 40.dp
+internal val MAP_FIT_PADDING = 40.dp
 
 /** 이보다 퍼져 있어야 "화면을 채워서 보여줄 만큼 넓다"고 보고, 아니면 고정 줌으로 중심만 맞춘다
  * (예: 홀인원처럼 샷이 한 곳에 몰려 있으면 fitMapPoints가 억지로 최대 줌까지 당겨버린다). */
-private const val MIN_FIT_SPAN_METERS = 10.0
+internal const val MIN_FIT_SPAN_METERS = 10.0
 
 /**
  * 지금 화면이 지도에 요청하는 내용. 위치/크기와 그릴 데이터를 한 번에 담는다.
