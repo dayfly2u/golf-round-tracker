@@ -25,6 +25,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.golfrecorder.domain.model.MapProvider
 import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.util.haversineMeters
 import com.kakao.vectormap.KakaoMap
@@ -59,6 +60,7 @@ internal class MapRequest(
     val offset: IntOffset,
     val size: IntSize,
     val cameraKey: String,
+    val provider: MapProvider,
     val greenLocation: AppLatLng?,
     val currentLocation: AppLatLng?,
     val shots: List<ShotPoint>,
@@ -107,6 +109,7 @@ class MapSlotState {
 fun CourseMapSlot(
     state: MapSlotState,
     cameraKey: String,
+    provider: MapProvider,
     greenLocation: AppLatLng?,
     currentLocation: AppLatLng?,
     shots: List<ShotPoint>,
@@ -134,6 +137,7 @@ fun CourseMapSlot(
         currentOffset,
         size,
         cameraKey,
+        provider,
         greenLocation,
         currentLocation,
         shots,
@@ -147,6 +151,7 @@ fun CourseMapSlot(
                     offset = currentOffset,
                     size = size,
                     cameraKey = cameraKey,
+                    provider = provider,
                     greenLocation = greenLocation,
                     currentLocation = currentLocation,
                     shots = shots,
@@ -168,13 +173,14 @@ fun CourseMapSlot(
  * 절대 빠지지 않고, 화면이 바뀔 때는 위치만 옮긴다(요청이 없으면 화면 밖으로 치운다).
  */
 @Composable
-fun PersistentCourseMap(state: MapSlotState) {
+fun PersistentKakaoMap(state: MapSlotState) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val density = LocalDensity.current
     val mapViewState = remember { mutableStateOf<MapView?>(null) }
     val kakaoMapState = remember { mutableStateOf<KakaoMap?>(null) }
 
     val request = state.request
+    val kakaoRequest = request?.takeIf { it.provider == MapProvider.KAKAO }
 
     // 아직 아무 화면도 지도를 요청한 적 없으면 화면 폭 x 지도 높이를 기본값으로 잡는다.
     // (0 크기로 만들면 지도 엔진이 제대로 초기화되지 않는다.)
@@ -182,7 +188,7 @@ fun PersistentCourseMap(state: MapSlotState) {
     val defaultSize = with(density) {
         IntSize(configuration.screenWidthDp.dp.roundToPx(), MAP_HEIGHT.roundToPx())
     }
-    val size = request?.size?.takeIf { it.width > 0 }
+    val size = kakaoRequest?.size?.takeIf { it.width > 0 }
         ?: state.lastSize.takeIf { it.width > 0 }
         ?: defaultSize
 
@@ -190,8 +196,8 @@ fun PersistentCourseMap(state: MapSlotState) {
     // 숨겨둔다 — 안 그러면 이전 홀/라운드의 위치가 그대로 남아있는 지도가
     // 잠깐이라도 먼저 보여서(새 라운드 시작 직후 등) 혼란을 준다.
     var centeredCameraKey by remember { mutableStateOf<String?>(null) }
-    val offset = if (request != null && request.cameraKey == centeredCameraKey) {
-        request.offset
+    val offset = if (kakaoRequest != null && kakaoRequest.cameraKey == centeredCameraKey) {
+        kakaoRequest.offset
     } else {
         IntOffset(0, HIDDEN_OFFSET_Y)
     }
@@ -229,12 +235,12 @@ fun PersistentCourseMap(state: MapSlotState) {
     // 리뷰할 때는 리뷰하는 사람의 GPS 위치가 그 홀과 무관하므로 절대 현재 위치를
     // 쓰지 않는다. 그린이 없으면(그 홀에서 그린을 지정한 적이 없는 경우) 그 대신
     // 라운딩 중 기록된 첫 샷 위치로 대체한다 — 아예 못 찾는 것보다 낫다.
-    val cameraKey = request?.cameraKey
-    val center = if (request?.preferCurrentLocation == true) {
-        request.currentLocation ?: request.greenLocation
+    val cameraKey = kakaoRequest?.cameraKey
+    val center = if (kakaoRequest?.preferCurrentLocation == true) {
+        kakaoRequest.currentLocation ?: kakaoRequest.greenLocation
     } else {
-        request?.greenLocation
-            ?: request?.shots?.firstOrNull()?.let { AppLatLng(it.lat, it.lng) }
+        kakaoRequest?.greenLocation
+            ?: kakaoRequest?.shots?.firstOrNull()?.let { AppLatLng(it.lat, it.lng) }
     }
     // 리뷰든 라운드 진행 중이든, 지금 홀에 타수가 하나라도 기록돼 있으면 고정 줌으로
     // 한 점만 중심에 맞추지 않고 그 홀에서 친 모든 샷(+그린)이 화면 안에 다 들어오도록
@@ -242,10 +248,10 @@ fun PersistentCourseMap(state: MapSlotState) {
     // 궤적이 한눈에 보여야 한다(필드 테스트에서 긴 홀은 고정 줌(17)으로는 티샷이
     // 화면 밖으로 잘리는 경우가 있었다). 아직 한 타도 안 친 홀은 지금 플레이 중이면
     // 현재 위치를, 리뷰 중이면 그린 위치를 보여주는 아래 center 로직에 맡긴다.
-    val fitPoints: List<AppLatLng> = if (request != null && request.shots.isNotEmpty()) {
+    val fitPoints: List<AppLatLng> = if (kakaoRequest != null && kakaoRequest.shots.isNotEmpty()) {
         buildList {
-            request.greenLocation?.let { add(it) }
-            request.shots.forEach { add(AppLatLng(it.lat, it.lng)) }
+            kakaoRequest.greenLocation?.let { add(it) }
+            kakaoRequest.shots.forEach { add(AppLatLng(it.lat, it.lng)) }
         }
     } else {
         emptyList()
@@ -280,11 +286,11 @@ fun PersistentCourseMap(state: MapSlotState) {
     // "위치 조정" 버튼 전용 강제 이동 — 위 effect가 이미 현재 위치를 우선하지만,
     // GPS fix가 갱신되기 전 값으로 이동한 뒤일 수 있어 버튼을 누르면 그 시점의
     // 최신 위치로 한 번 더 확실히 맞춘다.
-    val recenterSignal = request?.recenterSignal ?: 0
+    val recenterSignal = kakaoRequest?.recenterSignal ?: 0
     LaunchedEffect(kakaoMapState.value, recenterSignal) {
         val map = kakaoMapState.value ?: return@LaunchedEffect
-        val target = request?.currentLocation
-        val key = request?.cameraKey
+        val target = kakaoRequest?.currentLocation
+        val key = kakaoRequest?.cameraKey
         if (recenterSignal > 0 && target != null) {
             map.moveCamera(
                 CameraUpdateFactory.newCenterPosition(LatLng.from(target.lat, target.lng), MAP_ZOOM_LEVEL)
@@ -293,13 +299,13 @@ fun PersistentCourseMap(state: MapSlotState) {
         }
     }
 
-    LaunchedEffect(kakaoMapState.value, request?.greenLocation, request?.shots, request?.penalties) {
+    LaunchedEffect(kakaoMapState.value, kakaoRequest?.greenLocation, kakaoRequest?.shots, kakaoRequest?.penalties) {
         val map = kakaoMapState.value ?: return@LaunchedEffect
-        // 화면이 지도를 놓아준 상태(request == null)에서는 아무것도 지우지 않는다.
+        // 화면이 지도를 놓아준 상태(kakaoRequest == null)에서는 아무것도 지우지 않는다.
         // 여기서 지우면 화면 전환 도중 "마지막 동작이 전부 삭제"로 끝나버려서
         // 다시 들어왔을 때 선/마커가 사라진 것처럼 보인다. 어차피 지도는 화면 밖에
         // 있고, 다음에 그릴 때 removeAll부터 하므로 남은 데이터는 문제되지 않는다.
-        val active = request ?: return@LaunchedEffect
+        val active = kakaoRequest ?: return@LaunchedEffect
         drawOverlays(map, active.greenLocation, active.shots, active.penalties)
     }
 
@@ -314,4 +320,18 @@ fun PersistentCourseMap(state: MapSlotState) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+}
+
+/**
+ * 앱에 하나뿐인 지도 슬롯의 진입점. 카카오/구글 지도 뷰를 둘 다 마운트해두고,
+ * 각자 [MapRequest.provider]가 자신과 다르면 스스로 화면 밖에 숨는다 — 매 라운드
+ * 전환마다 지도 엔진을 새로 만들지 않기 위해서다(카카오 SDK가 MapView를 반복
+ * 생성/파괴하면 GL 컨텍스트가 깨지는 버그가 있어 이 프로젝트는 지도를 앱 내내
+ * 하나만 유지하는 패턴을 쓴다 — 구글 쪽도 프로바이더 전환 시 같은 문제를 피하려고
+ * 동일한 패턴을 그대로 따른다).
+ */
+@Composable
+fun PersistentCourseMap(state: MapSlotState) {
+    PersistentKakaoMap(state)
+    PersistentGoogleMap(state)
 }

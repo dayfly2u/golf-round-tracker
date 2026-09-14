@@ -446,6 +446,7 @@ fun RoundPlayScreen(
                 online -> CourseMapSlot(
                     state = mapSlotState,
                     cameraKey = "round-${viewModel.roundId}-hole-${viewModel.currentHoleNumber}",
+                    provider = com.golfrecorder.domain.model.MapProvider.KAKAO,
                     greenLocation = greenLocation,
                     currentLocation = fixedLocation,
                     shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
