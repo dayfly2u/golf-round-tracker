@@ -25,6 +25,9 @@ private const val SHOT_BLUE = "#1E88E5"
 private const val SHOT_YELLOW = "#FFEB3B"
 private const val GREEN_RADIUS_METERS = 2.0
 private const val GREEN_FILL_COLOR = "#CCFFEB3B"
+// 카카오 쪽 거리 라벨(28px 텍스트 / 4px 외곽선)과 같은 느낌을 내려고 잡은 값이지만,
+// 두 SDK의 좌표/픽셀 단위 체계가 직접 비교 가능한 게 아니라서 이 36/6 값은 눈으로 보고
+// 맞춘 근사치일 뿐 픽셀 단위로 검증된 일치는 아니다.
 private const val DISTANCE_LABEL_TEXT_SIZE_PX = 36f
 private const val DISTANCE_LABEL_STROKE_WIDTH_PX = 6f
 

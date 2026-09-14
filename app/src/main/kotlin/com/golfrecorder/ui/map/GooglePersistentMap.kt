@@ -70,13 +70,35 @@ fun PersistentGoogleMap(state: MapSlotState) {
                 mapViewState.value = mapView
                 mapView.onCreate(null)
                 mapView.getMapAsync { map ->
-                    map.mapType = GoogleMap.MAP_TYPE_SATELLITE
+                    // 실제 GOOGLE 프로바이더 요청이 들어오기 전까지는 위성 타일을 받지
+                    // 않는다 — 구글맵을 한 번도 쓰지 않는 사용자도 이 숨겨진 지도가 계속
+                    // MAP_TYPE_SATELLITE로 타일을 받아오는 비용을 치르는 걸 막기 위해서다.
+                    // 첫 googleRequest가 도착하면 아래 LaunchedEffect에서 SATELLITE로 전환한다.
+                    map.mapType = GoogleMap.MAP_TYPE_NONE
+                    // 마커 탭 시 구글맵 기본 동작(카메라를 그 마커로 recenter)을 막는다 —
+                    // 카카오 Label은 탭해도 아무 동작이 없고, 이 파일도 사용자가 이미 옮겨둔
+                    // 지도를 샷 때문에 다시 끌어오지 않는다는 원칙을 따른다(아래 카메라 로직 참고).
+                    map.setOnMarkerClickListener { true }
+                    map.uiSettings.isMapToolbarEnabled = false
                     googleMapState.value = map
                 }
             }
         },
     )
 
+    // 실제 GOOGLE 프로바이더 요청이 처음 들어오는 순간에만 위성 타일 렌더링을 켠다
+    // (factory에서 MAP_TYPE_NONE으로 시작하는 이유는 위 getMapAsync 콜백 주석 참고).
+    var satelliteEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(googleMapState.value, googleRequest != null) {
+        val map = googleMapState.value ?: return@LaunchedEffect
+        if (googleRequest != null && !satelliteEnabled) {
+            map.mapType = GoogleMap.MAP_TYPE_SATELLITE
+            satelliteEnabled = true
+        }
+    }
+
+    // 이 카메라 로직을 고치면 반대편 프로바이더 파일(PersistentMap.kt의
+    // PersistentKakaoMap)의 동일 로직도 같이 고칠 것.
     val cameraKey = googleRequest?.cameraKey
     val center = if (googleRequest?.preferCurrentLocation == true) {
         googleRequest.currentLocation ?: googleRequest.greenLocation
@@ -107,7 +129,11 @@ fun PersistentGoogleMap(state: MapSlotState) {
                 fitPoints.forEach { include(LatLng(it.lat, it.lng)) }
             }.build()
             val paddingPx = with(density) { MAP_FIT_PADDING.roundToPx() }
-            map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, paddingPx))
+            // 2-arg newLatLngBounds(bounds, padding)는 맵 뷰가 아직 레이아웃되기 전이면
+            // "Map size can't be 0..." IllegalStateException을 던질 수 있다(구글 공식 문서).
+            // 4-arg 오버로드로 레이아웃 크기에 기대지 않고 이 컴포저블이 이미 갖고 있는
+            // size(IntSize)를 직접 넘겨서 이 실패 모드를 피한다.
+            map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, size.width, size.height, paddingPx))
             centeredCameraKey = cameraKey
         } else if (center != null) {
             map.moveCamera(

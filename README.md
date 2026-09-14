@@ -63,6 +63,7 @@ Home(라운드 기록 목록)
 - **오프라인/권한 폴백**: 위치 권한 없으면 "위치 권한이 필요합니다", 온라인이면 카카오맵 위성뷰(마커+이동경로), 오프라인이면 그린 좌표가 있을 때 하버사인 거리(`util/GeoUtil.kt`)만 텍스트로, 없으면 "그린 위치 미설정" 안내.
 - **DB 마이그레이션은 파괴적으로 처리** (`fallbackToDestructiveMigration()`, version 1→2). 아직 출시 전 개인 테스트 단계라 별도 Migration 코드는 작성하지 않음 — 이 변경으로 기존 테스트 데이터(TestCC 라운드)는 재설치 시 초기화됨.
 - **카카오 키**: `local.properties`의 `kakao.native.app.key`를 `app/build.gradle.kts`에서 읽어 `BuildConfig.KAKAO_NATIVE_APP_KEY`로 노출, `GolfRecorderApp.onCreate()`에서 `KakaoMapSdk.init()` 호출.
+- **구글 키**: 같은 방식으로 `local.properties`의 `google.maps.api.key`를 `app/build.gradle.kts`가 읽어 매니페스트 플레이스홀더(`googleMapsApiKey`)로 노출. Google Cloud Console에서 키를 발급받는 전체 절차는 여기 문서 대신 `docs/superpowers/specs/2026-09-14-google-maps-support-design.md`를 참고.
 
 ### 실기기 검증 결과
 실기기(갤럭시)에서 전체 플로우를 확인함: 위치 권한 프롬프트 → 그린 좌표 없는 홀에서 지도 탭-지정 모드 → 그린 마커 표시 → 스테퍼 "+"로 GPS 샷 기록(DB에 좌표까지 직접 대조 확인) → "−"로 해당 Shot 삭제 확인 → 그린 좌표가 코스 자산으로 다음 라운드에도 재사용됨 확인 → 비행기 모드에서 "오프라인 상태입니다" 폴백 확인.

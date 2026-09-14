@@ -109,7 +109,11 @@ class RoundPlayViewModel(
         private set
     var strokesPutt by mutableStateOf(0)
         private set
-    var mapProvider by mutableStateOf(MapProvider.KAKAO)
+    // DB 읽기(getMapProvider)가 끝나기 전까지는 아직 실제 프로바이더를 모른다는 뜻으로
+    // null을 쓴다 — KAKAO로 기본값을 잡아두면 GOOGLE 라운드에서도 잠깐이지만 카카오
+    // 지도가 먼저 그려졌다 구글로 갈아타는 "깜빡임"이 생긴다(아래 init, 그리고
+    // RoundPlayScreen의 CourseMapSlot 호출부 참고).
+    var mapProvider by mutableStateOf<MapProvider?>(null)
         private set
 
     private val shotsFlow = MutableStateFlow<List<ShotEntity>>(emptyList())
@@ -448,12 +452,17 @@ fun RoundPlayScreen(
                 }
                 Spacer(Modifier.height(8.dp))
             }
+            // DB에서 이 라운드의 실제 mapProvider를 읽어오는 동안(null)에는 지도를
+            // 아예 그리지 않는다 — KAKAO로 기본값을 먼저 그렸다가 GOOGLE로 바뀌면서
+            // 다시 그리면, 해외 코스처럼 카카오 타일이 아예 없는 곳에서 매번 빈/깨진
+            // 카카오 지도가 먼저 번쩍이고서야 구글 지도가 뜨는 문제가 있었다.
+            val provider = viewModel.mapProvider
             when {
                 !hasLocationPermission -> Text("위치 권한이 필요합니다.")
-                online -> CourseMapSlot(
+                online && provider != null -> CourseMapSlot(
                     state = mapSlotState,
                     cameraKey = "round-${viewModel.roundId}-hole-${viewModel.currentHoleNumber}",
-                    provider = viewModel.mapProvider,
+                    provider = provider,
                     greenLocation = greenLocation,
                     currentLocation = fixedLocation,
                     shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },
@@ -461,6 +470,9 @@ fun RoundPlayScreen(
                     recenterSignal = recenterSignal,
                     preferCurrentLocation = !viewModel.isReview,
                 )
+                // provider를 아직 못 읽어온 온라인 상태 — 아래 오프라인 분기들과 섞이지
+                // 않도록 별도 분기로 빼서 로딩이 끝날 때까지 빈 자리로 둔다.
+                online -> {}
                 greenLocation != null && fixedLocation != null -> {
                     val distance = haversineMeters(
                         fixedLocation.lat,

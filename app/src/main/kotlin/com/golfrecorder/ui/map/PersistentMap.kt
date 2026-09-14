@@ -11,7 +11,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -238,6 +237,8 @@ fun PersistentKakaoMap(state: MapSlotState) {
     // 리뷰할 때는 리뷰하는 사람의 GPS 위치가 그 홀과 무관하므로 절대 현재 위치를
     // 쓰지 않는다. 그린이 없으면(그 홀에서 그린을 지정한 적이 없는 경우) 그 대신
     // 라운딩 중 기록된 첫 샷 위치로 대체한다 — 아예 못 찾는 것보다 낫다.
+    // 이 카메라 로직을 고치면 반대편 프로바이더 파일(GooglePersistentMap.kt의
+    // PersistentGoogleMap)의 동일 로직도 같이 고칠 것.
     val cameraKey = kakaoRequest?.cameraKey
     val center = if (kakaoRequest?.preferCurrentLocation == true) {
         kakaoRequest.currentLocation ?: kakaoRequest.greenLocation
