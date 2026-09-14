@@ -42,6 +42,7 @@ import kotlinx.coroutines.delay
 
 private const val FAIL_VIBRATION_MS = 200L
 private const val GPS_FAILURE_MESSAGE_MS = 2500L
+private const val RECONNECTED_MESSAGE_MS = 2500L
 
 private fun vibrateFailure(context: Context) {
     val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -72,7 +73,22 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun RoundControlScreen(viewModel: RoundStateViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val isPhoneConnected by viewModel.isPhoneConnected.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // 끊김은 계속 보여주고(그동안 눌러도 큐에만 쌓이고 있다는 걸 알아야 하니), 다시
+    // 붙었을 때는 잠깐만 확인 메시지를 띄운다 — GPS 실패 문구와 같은 패턴. 앱을 막
+    // 열었을 때(처음부터 연결돼 있던 경우)는 "재연결" 메시지를 띄우지 않는다.
+    var lastSeenConnected by remember { mutableStateOf<Boolean?>(null) }
+    var showReconnectedMessage by remember { mutableStateOf(false) }
+    LaunchedEffect(isPhoneConnected) {
+        if (lastSeenConnected == false && isPhoneConnected) {
+            showReconnectedMessage = true
+            delay(RECONNECTED_MESSAGE_MS)
+            showReconnectedMessage = false
+        }
+        lastSeenConnected = isPhoneConnected
+    }
 
     // 폰 화면의 "위치를 가져오지 못해 기록되지 않았습니다" Toast와 같은 의도 — 워치는
     // 화면이 작아 텍스트 대신 진동 + 잠깐 뜨는 안내 문구로 알려준다. 처음 값을 받을
@@ -124,6 +140,12 @@ fun RoundControlScreen(viewModel: RoundStateViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        if (!isPhoneConnected) {
+            Text("폰 연결 끊김", color = Color.Red, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        } else if (showReconnectedMessage) {
+            Text("폰 연결됨", color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        }
+
         if (!state.roundActive) {
             Text(
                 "라운드가 시작되지 않았습니다.\n폰에서 라운드를 시작해주세요.",

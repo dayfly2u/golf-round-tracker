@@ -13,8 +13,10 @@ import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -49,7 +51,14 @@ class RoundStateViewModel(application: Application) :
     private val _state = MutableStateFlow(RoundUiState())
     val state: StateFlow<RoundUiState> = _state
 
+    // 폰과 블루투스로 연결돼 있는지 — 몇 초 간격으로 연결된 노드 목록을 확인해서
+    // 반영한다. 초기값을 true로 두는 이유는 "연결 끊김" 배너가 앱을 막 열자마자
+    // 잠깐 잘못 뜨는 것보다, 첫 확인 전까지는 조용히 있는 게 낫기 때문이다.
+    private val _isPhoneConnected = MutableStateFlow(true)
+    val isPhoneConnected: StateFlow<Boolean> = _isPhoneConnected
+
     private val dataClient = Wearable.getDataClient(application)
+    private val nodeClient = Wearable.getNodeClient(application)
 
     init {
         dataClient.addListener(this)
@@ -68,6 +77,21 @@ class RoundStateViewModel(application: Application) :
                 Log.e(TAG, "initial dataItems FAILED", e)
             } finally {
                 items?.release()
+            }
+        }
+        viewModelScope.launch {
+            while (isActive) {
+                val connected = try {
+                    nodeClient.connectedNodes.await().isNotEmpty()
+                } catch (e: Exception) {
+                    Log.e(TAG, "connectedNodes check FAILED", e)
+                    false
+                }
+                if (_isPhoneConnected.value != connected) {
+                    Log.d(TAG, "phone connection changed: $connected")
+                }
+                _isPhoneConnected.value = connected
+                delay(CONNECTION_POLL_INTERVAL_MS)
             }
         }
     }
@@ -194,5 +218,6 @@ class RoundStateViewModel(application: Application) :
 
     companion object {
         private const val TAG = "RoundStateViewModel"
+        private const val CONNECTION_POLL_INTERVAL_MS = 3000L
     }
 }
