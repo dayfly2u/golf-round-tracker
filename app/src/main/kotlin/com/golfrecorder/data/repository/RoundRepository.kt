@@ -9,9 +9,9 @@ import kotlinx.coroutines.flow.Flow
 
 class RoundRepository(private val roundDao: RoundDao) {
 
-    suspend fun startRound(courseId: Long, courseName: String, playedAt: Long): Long =
+    suspend fun startRound(courseId: Long, courseName: String, playedAt: Long, locationSource: String): Long =
         roundDao.insertRound(
-            RoundEntity(courseId = courseId, courseName = courseName, playedAt = playedAt)
+            RoundEntity(courseId = courseId, courseName = courseName, playedAt = playedAt, locationSource = locationSource)
         )
 
     suspend fun finishRound(roundId: Long, finishedAt: Long) =
@@ -51,4 +51,6 @@ class RoundRepository(private val roundDao: RoundDao) {
 
     suspend fun updateCurrentHoleNumber(roundId: Long, holeNumber: Int) =
         roundDao.updateCurrentHoleNumber(roundId, holeNumber)
+
+    suspend fun getLocationSource(roundId: Long): String? = roundDao.getLocationSource(roundId)
 }

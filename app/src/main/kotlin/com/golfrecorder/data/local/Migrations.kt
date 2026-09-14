@@ -86,3 +86,13 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
         db.execSQL("UPDATE penalties SET phase = 'PUTT' WHERE phase = 'SHORT_GAME'")
     }
 }
+
+/** 라운드마다 샷 GPS를 폰 기준/워치 기준 중 무엇으로 기록할지 고정해서 저장한다
+ * (카트를 타면 폰이 카트에 남는 경우가 많아 그럴 땐 워치 GPS가 더 정확하다).
+ * 순수 컬럼 추가라 기존 데이터에는 영향이 없다 — 기존 라운드는 전부 지금까지와
+ * 동일한 'PHONE' 기준으로 채워진다. */
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE rounds ADD COLUMN locationSource TEXT NOT NULL DEFAULT 'PHONE'")
+    }
+}

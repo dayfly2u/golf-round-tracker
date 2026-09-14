@@ -67,4 +67,7 @@ interface RoundDao {
 
     @Query("UPDATE rounds SET currentHoleNumber = :holeNumber WHERE id = :roundId")
     suspend fun updateCurrentHoleNumber(roundId: Long, holeNumber: Int)
+
+    @Query("SELECT locationSource FROM rounds WHERE id = :roundId")
+    suspend fun getLocationSource(roundId: Long): String?
 }

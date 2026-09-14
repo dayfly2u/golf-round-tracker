@@ -34,4 +34,7 @@ data class RoundEntity(
     val review: String? = null,
     /** 워치 연동/화면 재진입 시 "지금 몇 홀인지" 복원용. 라운드 생성 시 1로 시작. */
     val currentHoleNumber: Int = 1,
+    /** LocationSource.name ("PHONE"/"WATCH") — 이 라운드의 샷 GPS를 어느 기기
+     * 기준으로 기록할지. 코스 선택 화면에서 라운드 시작 시 한 번 정하면 고정된다. */
+    val locationSource: String = "PHONE",
 )

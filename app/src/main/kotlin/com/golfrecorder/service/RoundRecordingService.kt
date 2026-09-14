@@ -13,8 +13,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.golfrecorder.MainActivity
 import com.golfrecorder.di.AppContainer
+import com.golfrecorder.domain.model.LocationSource
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.domain.model.StrokeCalculator
+import com.golfrecorder.location.LatLng as AppLatLng
 import com.golfrecorder.location.LocationCapture
 import com.golfrecorder.location.LocationTracker
 import com.golfrecorder.wearsync.WearSync
@@ -43,8 +45,8 @@ class RoundRecordingService : Service() {
 
     private val messageListener = MessageClient.OnMessageReceivedListener { event ->
         if (event.path != WearSync.ACTION_PATH) return@OnMessageReceivedListener
-        val action = String(event.data, Charsets.UTF_8)
-        serviceScope.launch { handleAction(action) }
+        val payload = String(event.data, Charsets.UTF_8)
+        serviceScope.launch { handleAction(payload) }
     }
 
     override fun onCreate() {
@@ -95,13 +97,24 @@ class RoundRecordingService : Service() {
         super.onDestroy()
     }
 
-    private suspend fun handleAction(action: String) {
+    private suspend fun handleAction(payload: String) {
         if (roundId <= 0 || courseId <= 0) return
         val holeNumber = container.roundRepository.getCurrentHoleNumber(roundId) ?: return
+        // "ACTION" 또는 "ACTION|위도|경도" — 뒤의 좌표는 이 라운드가 워치 GPS를
+        // 기준으로 쓸 때만 INCREMENT_* 액션에 붙어 온다(WearSync.ACTION_PATH 참고).
+        val parts = payload.split("|")
+        val action = parts[0]
+        val watchLocation = if (parts.size == 3) {
+            val lat = parts[1].toDoubleOrNull()
+            val lng = parts[2].toDoubleOrNull()
+            if (lat != null && lng != null) AppLatLng(lat, lng) else null
+        } else {
+            null
+        }
         when (action) {
-            WearSync.ACTION_INCREMENT_TO_GREEN -> incrementStroke(holeNumber, ShotPhase.TO_GREEN)
+            WearSync.ACTION_INCREMENT_TO_GREEN -> incrementStroke(holeNumber, ShotPhase.TO_GREEN, watchLocation)
             WearSync.ACTION_DECREMENT_TO_GREEN -> decrementStroke(holeNumber, ShotPhase.TO_GREEN)
-            WearSync.ACTION_INCREMENT_PUTT -> incrementStroke(holeNumber, ShotPhase.PUTT)
+            WearSync.ACTION_INCREMENT_PUTT -> incrementStroke(holeNumber, ShotPhase.PUTT, watchLocation)
             WearSync.ACTION_DECREMENT_PUTT -> decrementStroke(holeNumber, ShotPhase.PUTT)
             WearSync.ACTION_NEXT_HOLE -> changeHole(holeNumber + 1)
             WearSync.ACTION_PREV_HOLE -> changeHole(holeNumber - 1)
@@ -109,11 +122,22 @@ class RoundRecordingService : Service() {
         pushState()
     }
 
-    private suspend fun incrementStroke(holeNumber: Int, phase: ShotPhase) {
+    private suspend fun incrementStroke(holeNumber: Int, phase: ShotPhase, watchLocation: AppLatLng?) {
         val shots = container.shotRepository.getShots(roundId, holeNumber).first()
         val penalties = container.penaltyRepository.getPenalties(roundId, holeNumber).first()
         val newValue = StrokeCalculator.currentTotal(shots, penalties, phase) + 1
-        val loc = if (LocationCapture.hasPermission(this)) LocationTracker.latestLocation(this) else null
+        // 이 라운드가 워치 기준이면 워치가 그 순간 실어 보낸 좌표를 그대로 쓰고(못
+        // 받았으면 실패로 처리 — 카트에 남겨둔 폰 위치로 조용히 대체하면 위치가
+        // 부정확한 채로 기록되는 게 더 나쁘다), 폰 기준이면 기존처럼 폰이 계속
+        // 추적해온 위치를 쓴다.
+        val locationSource = container.roundRepository.getLocationSource(roundId)
+        val loc = if (locationSource == LocationSource.WATCH.name) {
+            watchLocation
+        } else if (LocationCapture.hasPermission(this)) {
+            LocationTracker.latestLocation(this)
+        } else {
+            null
+        }
         if (loc != null) {
             container.shotRepository.recordShot(roundId, holeNumber, phase, newValue, loc.lat, loc.lng)
         } else {
@@ -166,6 +190,8 @@ class RoundRecordingService : Service() {
                     WearSync.KEY_STROKES_PUTT,
                     StrokeCalculator.currentTotal(shots, penalties, ShotPhase.PUTT),
                 )
+                val locationSource = container.roundRepository.getLocationSource(roundId)
+                dataMap.putBoolean(WearSync.KEY_USE_WATCH_LOCATION, locationSource == LocationSource.WATCH.name)
             }
         }.setUrgent()
         try {

@@ -1,6 +1,7 @@
 package com.golfrecorder.ui.course
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,12 +25,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -37,10 +43,14 @@ import androidx.lifecycle.viewModelScope
 import com.golfrecorder.data.local.entity.CourseEntity
 import com.golfrecorder.data.repository.CourseRepository
 import com.golfrecorder.data.repository.RoundRepository
+import com.golfrecorder.domain.model.LocationSource
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+private const val PREFS_NAME = "golf_prefs"
+private const val KEY_LAST_USE_WATCH_LOCATION = "lastUseWatchLocation"
 
 /** 새 라운드를 시작할 때 코스를 "고르기만" 하는 화면 — 추가/수정/삭제는 코스 관리에서 한다. */
 class CourseSelectViewModel(
@@ -50,9 +60,10 @@ class CourseSelectViewModel(
     val courses: StateFlow<List<CourseEntity>> = courseRepository.getCourses()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun startRound(courseId: Long, courseName: String, onStarted: (roundId: Long) -> Unit) {
+    fun startRound(courseId: Long, courseName: String, useWatchLocation: Boolean, onStarted: (roundId: Long) -> Unit) {
         viewModelScope.launch {
-            val roundId = roundRepository.startRound(courseId, courseName, System.currentTimeMillis())
+            val locationSource = if (useWatchLocation) LocationSource.WATCH else LocationSource.PHONE
+            val roundId = roundRepository.startRound(courseId, courseName, System.currentTimeMillis(), locationSource.name)
             onStarted(roundId)
         }
     }
@@ -77,6 +88,19 @@ fun CourseSelectScreen(
     val courses by viewModel.courses.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+    // 지난번 고른 값을 기본값으로 — 카트/도보 여부는 한동안 비슷하게 반복되는 경우가 많다.
+    var useWatchLocation by remember {
+        mutableStateOf(
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_LAST_USE_WATCH_LOCATION, false)
+        )
+    }
+    fun setUseWatchLocation(value: Boolean) {
+        useWatchLocation = value
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit { putBoolean(KEY_LAST_USE_WATCH_LOCATION, value) }
+    }
+
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { /* no-op either way — the round can start regardless; the notification just won't show if denied */ }
@@ -97,19 +121,44 @@ fun CourseSelectScreen(
             )
         },
     ) { padding ->
-        if (courses.isEmpty()) {
-            Text(
-                "등록된 코스가 없습니다. \"코스 관리\"에서 코스를 추가해주세요.",
-                modifier = Modifier.padding(padding).padding(16.dp),
-            )
-            return@Scaffold
-        }
-        LazyColumn(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("위치 기준", fontWeight = FontWeight.Bold)
+                Row {
+                    TextButton(onClick = { setUseWatchLocation(false) }) {
+                        Text(
+                            "폰",
+                            fontWeight = if (!useWatchLocation) FontWeight.Bold else FontWeight.Normal,
+                            color = if (!useWatchLocation) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                        )
+                    }
+                    TextButton(onClick = { setUseWatchLocation(true) }) {
+                        Text(
+                            "와치",
+                            fontWeight = if (useWatchLocation) FontWeight.Bold else FontWeight.Normal,
+                            color = if (useWatchLocation) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                        )
+                    }
+                }
+            }
+            HorizontalDivider()
+            if (courses.isEmpty()) {
+                Text(
+                    "등록된 코스가 없습니다. \"코스 관리\"에서 코스를 추가해주세요.",
+                    modifier = Modifier.padding(16.dp),
+                )
+                return@Scaffold
+            }
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(courses, key = { it.id }) { course ->
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .clickable {
-                            viewModel.startRound(course.id, course.name) { roundId ->
+                            viewModel.startRound(course.id, course.name, useWatchLocation) { roundId ->
                                 onCourseSelected(course.id, roundId)
                             }
                         }
@@ -145,6 +194,7 @@ fun CourseSelectScreen(
                     }
                 }
                 HorizontalDivider()
+            }
             }
         }
     }
