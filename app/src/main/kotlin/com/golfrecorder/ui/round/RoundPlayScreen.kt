@@ -50,6 +50,7 @@ import com.golfrecorder.data.repository.CourseRepository
 import com.golfrecorder.data.repository.PenaltyRepository
 import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.data.repository.ShotRepository
+import com.golfrecorder.domain.model.MapProvider
 import com.golfrecorder.domain.model.PenaltyType
 import com.golfrecorder.domain.model.ShotPhase
 import com.golfrecorder.domain.model.StrokeCalculator
@@ -108,6 +109,8 @@ class RoundPlayViewModel(
         private set
     var strokesPutt by mutableStateOf(0)
         private set
+    var mapProvider by mutableStateOf(MapProvider.KAKAO)
+        private set
 
     private val shotsFlow = MutableStateFlow<List<ShotEntity>>(emptyList())
     val shots: StateFlow<List<ShotEntity>> = shotsFlow
@@ -119,6 +122,10 @@ class RoundPlayViewModel(
     private var strokeTotalsJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            val stored = roundRepository.getMapProvider(roundId)
+            mapProvider = runCatching { MapProvider.valueOf(stored ?: "KAKAO") }.getOrDefault(MapProvider.KAKAO)
+        }
         loadHole(initialHoleNumber)
         if (!isReview) {
             viewModelScope.launch { roundRepository.updateCurrentHoleNumber(roundId, initialHoleNumber) }
@@ -446,7 +453,7 @@ fun RoundPlayScreen(
                 online -> CourseMapSlot(
                     state = mapSlotState,
                     cameraKey = "round-${viewModel.roundId}-hole-${viewModel.currentHoleNumber}",
-                    provider = com.golfrecorder.domain.model.MapProvider.KAKAO,
+                    provider = viewModel.mapProvider,
                     greenLocation = greenLocation,
                     currentLocation = fixedLocation,
                     shots = shots.map { ShotPoint(ShotPhase.valueOf(it.phase), it.lat, it.lng) },

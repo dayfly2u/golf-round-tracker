@@ -45,6 +45,7 @@ import com.golfrecorder.data.local.entity.CourseEntity
 import com.golfrecorder.data.repository.CourseRepository
 import com.golfrecorder.data.repository.RoundRepository
 import com.golfrecorder.domain.model.LocationSource
+import com.golfrecorder.domain.model.MapProvider
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -52,6 +53,7 @@ import kotlinx.coroutines.launch
 
 private const val PREFS_NAME = "golf_prefs"
 private const val KEY_LAST_USE_WATCH_LOCATION = "lastUseWatchLocation"
+private const val KEY_LAST_USE_GOOGLE_MAP = "lastUseGoogleMap"
 
 /** 새 라운드를 시작할 때 코스를 "고르기만" 하는 화면 — 추가/수정/삭제는 코스 관리에서 한다. */
 class CourseSelectViewModel(
@@ -61,10 +63,20 @@ class CourseSelectViewModel(
     val courses: StateFlow<List<CourseEntity>> = courseRepository.getCourses()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun startRound(courseId: Long, courseName: String, useWatchLocation: Boolean, onStarted: (roundId: Long) -> Unit) {
+    fun startRound(
+        courseId: Long,
+        courseName: String,
+        useWatchLocation: Boolean,
+        useGoogleMap: Boolean,
+        onStarted: (roundId: Long) -> Unit,
+    ) {
         viewModelScope.launch {
             val locationSource = if (useWatchLocation) LocationSource.WATCH else LocationSource.PHONE
-            val roundId = roundRepository.startRound(courseId, courseName, System.currentTimeMillis(), locationSource.name, "KAKAO")
+            val mapProvider = if (useGoogleMap) MapProvider.GOOGLE else MapProvider.KAKAO
+            val roundId = roundRepository.startRound(
+                courseId, courseName, System.currentTimeMillis(),
+                locationSource.name, mapProvider.name,
+            )
             onStarted(roundId)
         }
     }
@@ -100,6 +112,17 @@ fun CourseSelectScreen(
         useWatchLocation = value
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit { putBoolean(KEY_LAST_USE_WATCH_LOCATION, value) }
+    }
+    var useGoogleMap by remember {
+        mutableStateOf(
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_LAST_USE_GOOGLE_MAP, false)
+        )
+    }
+    fun setUseGoogleMap(value: Boolean) {
+        useGoogleMap = value
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit { putBoolean(KEY_LAST_USE_GOOGLE_MAP, value) }
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -138,6 +161,21 @@ fun CourseSelectScreen(
                 }
                 Switch(checked = useWatchLocation, onCheckedChange = { setUseWatchLocation(it) })
             }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("해외 코스 (구글맵 사용)", fontWeight = FontWeight.Bold)
+                    Text(
+                        " (꺼져있으면 카카오맵 사용)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+                Switch(checked = useGoogleMap, onCheckedChange = { setUseGoogleMap(it) })
+            }
             HorizontalDivider()
             if (courses.isEmpty()) {
                 Text(
@@ -151,7 +189,7 @@ fun CourseSelectScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .clickable {
-                            viewModel.startRound(course.id, course.name, useWatchLocation) { roundId ->
+                            viewModel.startRound(course.id, course.name, useWatchLocation, useGoogleMap) { roundId ->
                                 onCourseSelected(course.id, roundId)
                             }
                         }
