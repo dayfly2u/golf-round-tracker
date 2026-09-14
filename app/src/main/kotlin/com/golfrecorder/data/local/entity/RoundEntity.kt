@@ -37,4 +37,8 @@ data class RoundEntity(
     /** LocationSource.name ("PHONE"/"WATCH") — 이 라운드의 샷 GPS를 어느 기기
      * 기준으로 기록할지. 코스 선택 화면에서 라운드 시작 시 한 번 정하면 고정된다. */
     val locationSource: String = "PHONE",
+    /** MapProvider.name ("KAKAO"/"GOOGLE") — 이 라운드 지도를 어느 프로바이더로
+     * 그릴지. 코스 선택 화면에서 라운드 시작 시 한 번 정하면 고정된다(리뷰할 때도
+     * 같은 값을 다시 읽어서 그 프로바이더로 그린다). */
+    val mapProvider: String = "KAKAO",
 )

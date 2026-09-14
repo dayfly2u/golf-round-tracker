@@ -64,7 +64,7 @@ class CourseSelectViewModel(
     fun startRound(courseId: Long, courseName: String, useWatchLocation: Boolean, onStarted: (roundId: Long) -> Unit) {
         viewModelScope.launch {
             val locationSource = if (useWatchLocation) LocationSource.WATCH else LocationSource.PHONE
-            val roundId = roundRepository.startRound(courseId, courseName, System.currentTimeMillis(), locationSource.name)
+            val roundId = roundRepository.startRound(courseId, courseName, System.currentTimeMillis(), locationSource.name, "KAKAO")
             onStarted(roundId)
         }
     }

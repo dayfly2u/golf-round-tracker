@@ -96,3 +96,13 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
         db.execSQL("ALTER TABLE rounds ADD COLUMN locationSource TEXT NOT NULL DEFAULT 'PHONE'")
     }
 }
+
+/** 라운드마다 지도를 카카오맵/구글맵 중 무엇으로 그릴지 고정해서 저장한다
+ * (해외 라운딩은 카카오맵이 커버를 못 해서 구글맵이 필요하다). 순수 컬럼 추가라
+ * 기존 데이터에는 영향이 없다 — 기존 라운드는 전부 국내 기록이므로 지금까지와
+ * 동일한 'KAKAO' 기준으로 채워진다. */
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE rounds ADD COLUMN mapProvider TEXT NOT NULL DEFAULT 'KAKAO'")
+    }
+}

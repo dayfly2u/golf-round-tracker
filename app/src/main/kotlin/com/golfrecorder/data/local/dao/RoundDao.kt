@@ -70,4 +70,7 @@ interface RoundDao {
 
     @Query("SELECT locationSource FROM rounds WHERE id = :roundId")
     suspend fun getLocationSource(roundId: Long): String?
+
+    @Query("SELECT mapProvider FROM rounds WHERE id = :roundId")
+    suspend fun getMapProvider(roundId: Long): String?
 }
