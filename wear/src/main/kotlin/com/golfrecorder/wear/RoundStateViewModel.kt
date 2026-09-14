@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.golfrecorder.wearsync.WearSync
 import com.google.android.gms.wearable.DataClient
+import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataItemBuffer
 import com.google.android.gms.wearable.DataMap
@@ -31,10 +32,20 @@ data class RoundUiState(
     val useWatchLocation: Boolean = false,
 )
 
+private enum class Counter { TO_GREEN, PUTT }
+private data class PendingDelta(val counter: Counter, val amount: Int)
+
 class RoundStateViewModel(application: Application) :
     AndroidViewModel(application),
     DataClient.OnDataChangedListener {
 
+    // 폰이 보내주는 원본(확정) 상태 — round-state DataItem을 받을 때만 갱신된다.
+    private var serverState = RoundUiState()
+    // 아직 폰의 처리 완료 확인(=큐 아이템 삭제)을 못 받은 액션들의 증감분. 블루투스가
+    // 끊긴 동안 버튼을 눌러도 화면 숫자가 바로 움직이도록, 이 값을 serverState 위에
+    // 얹어서 보여준다 — 나중에 폰이 그 액션을 처리하면(큐 아이템 삭제 이벤트) 더는
+    // 겹쳐 더하지 않는다. 키는 sendAction에서 만든 큐 경로의 타임스탬프.
+    private val pendingDeltas = mutableMapOf<Long, PendingDelta>()
     private val _state = MutableStateFlow(RoundUiState())
     val state: StateFlow<RoundUiState> = _state
 
@@ -63,17 +74,33 @@ class RoundStateViewModel(application: Application) :
 
     override fun onDataChanged(dataEvents: DataEventBuffer) {
         Log.d(TAG, "onDataChanged count=${dataEvents.count}")
+        var pendingChanged = false
         for (event in dataEvents) {
             Log.d(TAG, "onDataChanged event type=${event.type} uri=${event.dataItem.uri}")
-            if (event.dataItem.uri.path == WearSync.STATE_PATH) {
-                applyDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
+            val path = event.dataItem.uri.path.orEmpty()
+            if (path == WearSync.STATE_PATH) {
+                if (event.type == DataEvent.TYPE_CHANGED) {
+                    applyDataMap(DataMapItem.fromDataItem(event.dataItem).dataMap)
+                }
+            } else if (path.startsWith(WearSync.ACTION_QUEUE_PATH_PREFIX)) {
+                // 폰이 처리를 마치고 이 큐 아이템을 지우면(TYPE_DELETED) 그 액션이 확정된
+                // 것 — round-state에 이미 반영됐을 것이므로 낙관적 증감분을 지운다.
+                if (event.type == DataEvent.TYPE_DELETED) {
+                    val seq = path.substringAfterLast('/').toLongOrNull()
+                    if (seq != null && pendingDeltas.remove(seq) != null) {
+                        pendingChanged = true
+                    }
+                }
             }
         }
         dataEvents.release()
+        if (pendingChanged) {
+            _state.value = displayState()
+        }
     }
 
     private fun applyDataMap(map: DataMap) {
-        _state.value = RoundUiState(
+        val newServerState = RoundUiState(
             roundActive = map.getBoolean(WearSync.KEY_ROUND_ACTIVE, false),
             holeNumber = map.getInt(WearSync.KEY_HOLE_NUMBER, 1),
             par = map.getInt(WearSync.KEY_PAR, 4),
@@ -83,12 +110,41 @@ class RoundStateViewModel(application: Application) :
             lastFailedAt = map.getLong(WearSync.KEY_LAST_FAILED_AT, 0L),
             useWatchLocation = map.getBoolean(WearSync.KEY_USE_WATCH_LOCATION, false),
         )
+        // 홀이 바뀌었으면 이전 홀 기준으로 쌓아뒀던 낙관적 증감분은 더 이상 의미가 없다.
+        if (newServerState.holeNumber != serverState.holeNumber) {
+            pendingDeltas.clear()
+        }
+        serverState = newServerState
+        _state.value = displayState()
+    }
+
+    private fun displayState(): RoundUiState {
+        var toGreenDelta = 0
+        var puttDelta = 0
+        for (pending in pendingDeltas.values) {
+            when (pending.counter) {
+                Counter.TO_GREEN -> toGreenDelta += pending.amount
+                Counter.PUTT -> puttDelta += pending.amount
+            }
+        }
+        return serverState.copy(
+            strokesToGreen = (serverState.strokesToGreen + toGreenDelta).coerceAtLeast(0),
+            strokesPutt = (serverState.strokesPutt + puttDelta).coerceAtLeast(0),
+        )
     }
 
     /** 좌표를 함께 보내야 하는 액션인지 — 타수를 실제로 "추가"하는 두 액션만 위치가
      * 필요하다(감소/홀 이동은 기록할 좌표가 없다). */
     private fun needsLocation(action: String): Boolean =
         action == WearSync.ACTION_INCREMENT_TO_GREEN || action == WearSync.ACTION_INCREMENT_PUTT
+
+    private fun pendingDeltaFor(action: String): PendingDelta? = when (action) {
+        WearSync.ACTION_INCREMENT_TO_GREEN -> PendingDelta(Counter.TO_GREEN, 1)
+        WearSync.ACTION_DECREMENT_TO_GREEN -> PendingDelta(Counter.TO_GREEN, -1)
+        WearSync.ACTION_INCREMENT_PUTT -> PendingDelta(Counter.PUTT, 1)
+        WearSync.ACTION_DECREMENT_PUTT -> PendingDelta(Counter.PUTT, -1)
+        else -> null
+    }
 
     fun sendAction(action: String) {
         // DataItem 큐에 넣는다 — MessageClient(옛 방식)는 그 순간 폰과 블루투스가
@@ -101,10 +157,17 @@ class RoundStateViewModel(application: Application) :
         } else {
             null
         }
+        val seq = System.currentTimeMillis()
+        // 폰의 처리 확인(큐 삭제 이벤트)을 기다리지 않고 버튼을 누른 즉시 화면에
+        // 반영한다 — 블루투스가 끊겨 있어도 누른 게 바로 보여야 하기 때문.
+        pendingDeltaFor(action)?.let { pending ->
+            pendingDeltas[seq] = pending
+            _state.value = displayState()
+        }
         viewModelScope.launch {
             try {
                 val request = PutDataMapRequest.create(
-                    "${WearSync.ACTION_QUEUE_PATH_PREFIX}/${System.currentTimeMillis()}",
+                    "${WearSync.ACTION_QUEUE_PATH_PREFIX}/$seq",
                 ).apply {
                     dataMap.putString(WearSync.KEY_QUEUED_ACTION, action)
                     if (loc != null) {
@@ -116,6 +179,10 @@ class RoundStateViewModel(application: Application) :
                 Log.d(TAG, "sendAction($action) queued uri=${result.uri}")
             } catch (e: Exception) {
                 Log.e(TAG, "sendAction($action) FAILED", e)
+                // 큐에 넣는 것조차 실패했으면(로컬 저장 실패 등) 낙관적 표시도 되돌린다.
+                if (pendingDeltas.remove(seq) != null) {
+                    _state.value = displayState()
+                }
             }
         }
     }
