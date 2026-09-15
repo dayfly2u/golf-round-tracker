@@ -106,3 +106,15 @@ val MIGRATION_17_18 = object : Migration(17, 18) {
         db.execSQL("ALTER TABLE rounds ADD COLUMN mapProvider TEXT NOT NULL DEFAULT 'KAKAO'")
     }
 }
+
+/** "핀위치 지정" 기능은 v0.5.9에서 UI를 없앴지만(그린 크기가 다양해 실효성이 없어서),
+ * 그 전에 이미 찍어둔 holes.greenLat/greenLng는 컬럼째로 남겨뒀었다 — 당장은 "마이그레이션
+ * 리스크 없는 죽은 컬럼"이라 봤는데, 실제로는 RoundPlayScreen이 지금도 이 값을 읽어서
+ * 지도에 노란 원으로 계속 그리고 있었다(사용자가 더 이상 지울 방법도 없이). 기능을
+ * 지운 의도와 안 맞으므로 이번에 값 자체를 비운다 — 컬럼은 남겨두되(다시 스키마를
+ * 건드릴 필요 없게) 전부 NULL로. */
+val MIGRATION_18_19 = object : Migration(18, 19) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("UPDATE holes SET greenLat = NULL, greenLng = NULL")
+    }
+}
