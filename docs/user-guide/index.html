@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>K-Golf 사용 설명서</title>
+<meta name="description" content="골프 기록 앱 K-Golf를 처음 쓰는 사람을 위한 스크린샷 기반 사용 가이드">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Noto+Sans+KR:wght@400;500;600;700;900&display=swap">
+<style>
+  :root { color-scheme: light dark; }
+  :root {
+    --bg: #faf7fc;
+    --surface: #ffffff;
+    --ink: #251f2e;
+    --ink-muted: #6e6580;
+    --accent: #6c4fc4;
+    --accent-soft: #ece5fa;
+    --accent-soft-line: #ddd0f2;
+    --line: #e6dff2;
+    --green: #2e7d32;
+    --green-soft: #e6f2e7;
+    --orange: #e07a00;
+    --orange-soft: #fdf0dc;
+    --blue: #1e6fd9;
+    --shadow: 0 1px 2px rgba(80, 48, 140, 0.06), 0 8px 24px rgba(80, 48, 140, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1c1720;
+      --surface: #262030;
+      --ink: #f1ecf7;
+      --ink-muted: #b3a8c4;
+      --accent: #b79dfb;
+      --accent-soft: #362a4d;
+      --accent-soft-line: #4a3a68;
+      --line: #3a3148;
+      --green: #7fd989;
+      --green-soft: #263524;
+      --orange: #ffb35c;
+      --orange-soft: #3a2c18;
+      --blue: #8ab8f7;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1c1720;
+    --surface: #262030;
+    --ink: #f1ecf7;
+    --ink-muted: #b3a8c4;
+    --accent: #b79dfb;
+    --accent-soft: #362a4d;
+    --accent-soft-line: #4a3a68;
+    --line: #3a3148;
+    --green: #7fd989;
+    --green-soft: #263524;
+    --orange: #ffb35c;
+    --orange-soft: #3a2c18;
+    --blue: #8ab8f7;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Noto Sans KR", "Malgun Gothic", sans-serif;
+    padding: 0 20px;
+    padding-block: 48px 80px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  h1, h2, .display {
+    font-family: "Gowun Dodum", "Noto Sans KR", sans-serif;
+    text-wrap: balance;
+  }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+  .badge {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: linear-gradient(155deg, var(--accent), #9b7ce8);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Gowun Dodum", sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    flex-shrink: 0;
+    box-shadow: var(--shadow);
+  }
+  header h1 { font-size: 1.7rem; margin: 0 0 2px; font-weight: 700; }
+  header p { margin: 0; color: var(--ink-muted); font-size: 0.95rem; }
+
+  .intro {
+    margin: 28px 0 44px;
+    padding: 18px 20px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    color: var(--ink-muted);
+    font-size: 0.95rem;
+    line-height: 1.7;
+  }
+  .intro strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- step zero (install) ---------- */
+  .install {
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-soft-line);
+    border-radius: 16px;
+    padding: 22px 24px;
+    margin-bottom: 52px;
+  }
+  .install h2 {
+    font-size: 1.15rem;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .install ol {
+    margin: 0;
+    padding-left: 1.3em;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+  .install li::marker { color: var(--accent); font-weight: 700; }
+
+  /* ---------- steps ---------- */
+  .steps { display: flex; flex-direction: column; gap: 56px; }
+
+  .step {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+    gap: 32px;
+    align-items: start;
+  }
+  .step.no-shot { grid-template-columns: 1fr; }
+
+  .step-num {
+    font-family: "Gowun Dodum", sans-serif;
+    font-size: 0.85rem;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: block;
+  }
+  .step h2 {
+    font-size: 1.3rem;
+    margin: 0 0 12px;
+    font-weight: 700;
+  }
+  .step p {
+    color: var(--ink-muted);
+    line-height: 1.75;
+    font-size: 0.96rem;
+    margin: 0 0 12px;
+  }
+  .step p:last-child { margin-bottom: 0; }
+  .step strong { color: var(--ink); font-weight: 600; }
+
+  .callout {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: var(--ink-muted);
+  }
+  .callout .label {
+    display: inline-block;
+    font-family: "Gowun Dodum", sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 999px;
+    padding: 2px 10px;
+    margin-bottom: 8px;
+  }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; }
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot.red { background: #e5484d; }
+  .dot.blue { background: var(--blue); }
+  .dot.yellow { background: #f2c94c; }
+
+  .shot {
+    background: var(--surface);
+    border-radius: 22px;
+    padding: 8px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+  }
+  .shot img {
+    width: 100%;
+    display: block;
+    border-radius: 15px;
+  }
+  .shot figcaption {
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    padding: 8px 4px 2px;
+  }
+  .shot-pair { display: flex; flex-direction: column; gap: 14px; }
+
+  .switch-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 3px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 2px 4px 2px 0;
+  }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-muted);
+    font-size: 0.85rem;
+    line-height: 1.8;
+  }
+  footer .title {
+    font-family: "Gowun Dodum", sans-serif;
+    color: var(--ink);
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  @media (max-width: 680px) {
+    .step, .step.no-shot { grid-template-columns: 1fr; }
+    .step .shot { max-width: 260px; margin: 0 auto; }
+    header h1 { font-size: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="badge">K</div>
+    <div>
+      <h1>K-Golf 사용 설명서</h1>
+      <p>처음 켜는 분을 위한 5분 가이드 — 코스 등록부터 라운드 결과 확인까지</p>
+    </div>
+  </header>
+
+  <div class="intro">
+    이 앱은 <strong>라운드마다 홀별 타수, 벌타, 샷 위치를 기록</strong>하고 끝나면 스코어를 정리해서 보여주는 골프 기록 앱이에요.
+    아래 순서 그대로 따라 하면 5분 안에 첫 라운드를 시작할 수 있어요.
+  </div>
+
+  <div class="install">
+    <h2>0. 설치하기</h2>
+    <ol>
+      <li>공유받은 <strong>app-debug.apk</strong> 파일을 폰에 다운로드해요.</li>
+      <li>파일을 눌렀을 때 "출처를 알 수 없는 앱" 경고가 뜨면 <strong>설치 허용</strong>을 눌러요 (앱스토어를 거치지 않고 직접 설치하는 파일이라 뜨는 정상적인 경고예요).</li>
+      <li>설치가 끝나면 <strong>K-Golf</strong> 아이콘을 눌러 실행해요.</li>
+    </ol>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div>
+        <span class="step-num">STEP 1</span>
+        <h2>자주 가는 코스 등록하기</h2>
+        <p>맨 처음엔 등록된 코스가 없어요. 홈 화면 오른쪽 위 <strong>"코스 관리"</strong>를 눌러 <strong>"새 코스 추가"</strong>로 들어가면, 코스 이름과 18홀 각각의 파(3/4/5)를 정할 수 있어요.</p>
+        <p>한 번 등록해두면 다음부터는 라운드 시작할 때 목록에서 고르기만 하면 돼요.</p>
+        <div class="callout">
+          <span class="label">TIP</span><br>
+          코스 이름을 누르면 평점·리뷰도 남길 수 있고, 손잡이(≡)를 꾹 눌러 드래그하면 목록 순서를 바꿀 수 있어요.
+        </div>
+      </div>
+      <div class="shot-pair">
+        <figure class="shot">
+          <img src="course-manage.png" alt="코스 관리 화면">
+          <figcaption>코스 관리 — 등록된 코스 목록</figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="course-add.png" alt="코스 추가 화면, 홀별 파 선택">
+          <figcaption>코스 추가 — 홀마다 파 선택</figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="step">
+      <div>
+        <span class="step-num">STEP 2</span>
+        <h2>라운드 시작하기</h2>
+        <p>홈 화면에서 <strong>"새 라운딩 시작!"</strong>을 누르면 코스 목록이 뜨고, 맨 위에 스위치 두 개가 있어요. 대부분은 그냥 끈 채로 시작하면 되고, 아래 상황에서만 켜주면 돼요.</p>
+        <div class="callout">
+          <span class="switch-tag">와치 GPS 켜기</span>
+          라운드 중 폰을 카트에 두고 다닐 때 — 워치가 대신 위치를 기록해줘요.
+        </div>
+        <div class="callout">
+          <span class="switch-tag">해외 코스 (구글맵 사용)</span>
+          국내가 아닌 해외 코스일 때 — 카카오맵은 국내만 지원해서, 해외에서는 이 스위치를 켜야 지도가 나와요.
+        </div>
+        <p>코스를 누르면 바로 1홀부터 라운드가 시작돼요.</p>
+      </div>
+      <div class="shot">
+        <img src="course-select.png" alt="코스 선택 화면, 와치 GPS와 구글맵 스위치">
+        <figcaption>코스 선택 — 위쪽 스위치 두 개</figcaption>
+      </div>
+    </div>
+
+    <div class="step">
+      <div>
+        <span class="step-num">STEP 3</span>
+        <h2>홀마다 타수 입력하기</h2>
+        <p>위성 지도 아래 버튼으로 <strong>그린까지 타수 · OB · 해저드 · 숏어프로치 · 퍼팅</strong>을 그때그때 +/-로 기록해요. 버튼을 누른 순간의 GPS 위치가 지도 위에 점으로 남아요.</p>
+        <div class="legend">
+          <span><span class="dot red"></span>그린까지 친 샷</span>
+          <span><span class="dot blue"></span>숏어프로치</span>
+          <span><span class="dot yellow"></span>퍼팅</span>
+        </div>
+        <p>지도가 내 위치와 다르게 보이면 오른쪽 위 <strong>"위치 조정"</strong>을 눌러 다시 맞출 수 있고, 한 홀이 끝나면 <strong>"다음 홀"</strong>로 넘어가면 돼요.</p>
+      </div>
+      <div class="shot">
+        <img src="round-play.png" alt="라운드 진행 화면, 지도와 타수 입력 버튼">
+        <figcaption>1홀 진행 중 — 타수 2개 입력한 모습</figcaption>
+      </div>
+    </div>
+
+    <div class="step">
+      <div>
+        <span class="step-num">STEP 4</span>
+        <h2>결과 확인하고 리뷰 남기기</h2>
+        <p>화면 위 <strong>"&lt; 뒤로"</strong>를 누르면 언제든 지금까지의 결과 화면으로 이동해요. 총타수, GIR, 홀별 기록을 볼 수 있고 <strong>라운딩 가격·동반자·후기</strong>도 선택으로 남길 수 있어요.</p>
+        <p>이 화면은 라운드 도중에도, 다 끝낸 뒤에도 같은 곳에서 볼 수 있어요 — 홀을 다 안 돌아도 기록은 사라지지 않아요.</p>
+      </div>
+      <div class="shot">
+        <img src="round-summary.png" alt="라운드 결과 화면, 총타수와 GIR, 리뷰 입력란">
+        <figcaption>라운드 결과 — 스코어와 리뷰 입력</figcaption>
+      </div>
+    </div>
+
+    <div class="step">
+      <div>
+        <span class="step-num">STEP 5</span>
+        <h2>홈 화면에서 지난 기록 보기</h2>
+        <p>홈 화면엔 완료한 라운드가 최신순으로 쌓여요. 코스 이름 아래로 <strong>날짜·시간·소요시간</strong>, 그 아래로 <strong>그린피·동반자 이름과 각자 스코어</strong>가 한 줄씩 표시되고, 오른쪽엔 이번 라운드 스코어 배지가 떠요 — 배지 색으로 이븐(초록) · 언더파(파랑) 같은 결과를 한눈에 구분할 수 있어요. 라운드를 누르면 그때 기록을 다시 열어볼 수 있어요.</p>
+        <p>화면 맨 아래 <strong>백업 / 복원</strong>으로 전체 기록을 파일 하나로 저장해두는 것도 추천해요.</p>
+      </div>
+      <div class="shot">
+        <img src="home.png" alt="홈 화면, 완료된 라운드 목록">
+        <figcaption>홈 — 완료된 라운드 목록 (날짜·그린피·동반자 줄은 예시라 흐리게 처리)</figcaption>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <span class="title">즐거운 라운딩 되세요 ⛳</span>
+    처음엔 코스 하나 등록하고 연습 삼아 1홀만 입력해보는 걸 추천해요. 버튼 위치만 익숙해지면 그다음부터는 라운드 내내 폰을 몇 번 안 봐도 될 만큼 단순해요.
+  </footer>
+
+</div>
+</body>
+</html>
