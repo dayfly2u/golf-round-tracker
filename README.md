@@ -21,7 +21,7 @@ Play 스토어에 올리는 앱이 아니라서, [Releases 페이지](https://gi
 
 ## 사용 설명서
 
-처음 써보는 분은 [사용 설명서](docs/user-guide.md)를 참고하세요 — 코스 등록부터 라운드 결과 확인까지 화면 캡처와 함께 안내합니다.
+처음 써보는 분은 [사용 설명서](https://dayfly2u.github.io/golf-round-tracker/user-guide/)를 참고하세요 — 코스 등록부터 라운드 결과 확인까지 화면 캡처와 함께 안내합니다. (저장소 안에서 바로 보려면 [마크다운 버전](docs/user-guide.md)도 있어요.)
 
 ## 지금까지 구현된 것 (1단계: 스코어 기록)
 
