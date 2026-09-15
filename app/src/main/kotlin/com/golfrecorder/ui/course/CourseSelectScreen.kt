@@ -140,7 +140,7 @@ fun CourseSelectScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("코스 선택") },
+                title = { Text("설정 & 코스선택") },
                 navigationIcon = { TextButton(onClick = onBack) { Text("< 뒤로") } },
             )
         },
