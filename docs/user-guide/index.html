@@ -170,6 +170,18 @@
   }
   .step p:last-child { margin-bottom: 0; }
   .step strong { color: var(--ink); font-weight: 600; }
+  .step ol {
+    margin: 4px 0 16px;
+    padding-left: 1.3em;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    color: var(--ink-muted);
+    font-size: 0.96rem;
+    line-height: 1.7;
+  }
+  .step ol li::marker { color: var(--accent); font-weight: 700; }
+  .step ol strong { color: var(--ink); font-weight: 600; }
 
   .callout {
     margin-top: 14px;
@@ -386,6 +398,29 @@
           <img src="hole-review-distance.png" alt="지난 라운드의 홀 리뷰 화면, 샷 사이 거리 표시">
           <figcaption>홀 리뷰 — 샷마다 이동 거리(m) 표시</figcaption>
         </figure>
+      </div>
+    </div>
+
+    <div class="step no-shot">
+      <div>
+        <span class="step-num">STEP 6 · 선택</span>
+        <h2>갤럭시 워치 연동 (선택 사항)</h2>
+        <p>폰만으로도 앱을 완전히 쓸 수 있어요. 워치 연동은 라운드 중 폰을 꺼내지 않고 손목에서 타수(그린까지·퍼팅)를 올리고 싶을 때만 필요한 선택 기능이에요.</p>
+        <p><strong>준비물</strong> — 폰과 이미 페어링된 Galaxy Watch(Wear OS), 그리고 릴리즈 Assets의 <strong>wear-debug.apk</strong>.</p>
+        <p><strong>설치 방법</strong> — 워치는 폰처럼 apk를 눌러서 바로 설치할 수 없어서, 폰에 설치 도우미 앱을 하나 더 깔아야 해요.</p>
+        <ol>
+          <li>워치에서 <strong>설정 → 워치 정보 → 소프트웨어</strong>로 들어가 <strong>빌드 번호</strong>를 5~7번 연속 탭해요 — "개발자 모드가 켜졌습니다" 안내가 뜨면 성공.</li>
+          <li>워치 <strong>설정 → 개발자 옵션</strong>에서 <strong>ADB 디버깅</strong>을 켜요.</li>
+          <li>폰의 Play 스토어에서 <strong>"Wear Installer"</strong>(워치 apk 설치를 도와주는 앱)를 설치해요.</li>
+          <li>Wear Installer를 열면 페어링된 워치를 자동으로 찾아줘요 — 연결되면 <strong>wear-debug.apk</strong> 파일을 골라 설치를 진행해요.</li>
+          <li>설치가 끝나면 워치 앱 목록에 K-Golf 아이콘이 보여요.</li>
+        </ol>
+        <div class="callout">
+          <span class="label">TIP</span><br>
+          PC와 adb(안드로이드 개발자 도구)에 익숙하면, 워치 설정의 "무선 디버깅"으로 안내되는 IP·포트·코드를 <code>adb pair</code>/<code>adb connect</code>에 입력해 직접 설치할 수도 있어요.
+        </div>
+        <p><strong>사용법</strong> — 폰에서 라운드를 시작하면 워치 화면에 자동으로 지금 홀·타수가 뜨고, 워치의 <strong>그린까지 +/-</strong>, <strong>퍼팅 +/-</strong>, <strong>이전 홀/다음 홀</strong> 버튼으로 조작할 수 있어요. 폰과 워치가 블루투스로 계속 통신하는 구조라, 둘이 멀어지면(폰을 카트에 두고 멀리 갈 때 등) 잠깐 반영이 늦어질 수 있지만 다시 가까워지면 자동으로 따라잡아요.</p>
+        <p>코스 선택(<strong>"설정 & 코스선택"</strong>) 화면의 <strong>"와치 GPS 켜기"</strong> 스위치를 켜면, 워치가 자체 GPS로 샷 위치를 기록해요 — 폰을 카트에 두고 다닐 때 유용해요.</p>
       </div>
     </div>
 
