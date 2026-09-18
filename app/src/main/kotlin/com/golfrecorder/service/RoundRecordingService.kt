@@ -214,9 +214,13 @@ class RoundRecordingService : Service() {
                     WearSync.KEY_STROKES_TO_GREEN,
                     StrokeCalculator.currentTotal(shots, penalties, ShotPhase.TO_GREEN),
                 )
+                // 워치 자체 버튼은 항상 PUTT으로만 기록하지만(위 ACTION_INCREMENT_PUTT
+                // 참고), 폰에서 숏어프로치를 따로 입력했을 수도 있으므로 워치 화면
+                // "숏/퍼팅" 숫자에는 둘을 합쳐서 보내야 폰 쪽 입력이 누락되지 않는다.
                 dataMap.putInt(
                     WearSync.KEY_STROKES_PUTT,
-                    StrokeCalculator.currentTotal(shots, penalties, ShotPhase.PUTT),
+                    StrokeCalculator.currentTotal(shots, penalties, ShotPhase.SHORT_GAME) +
+                        StrokeCalculator.currentTotal(shots, penalties, ShotPhase.PUTT),
                 )
                 val locationSource = container.roundRepository.getLocationSource(roundId)
                 dataMap.putBoolean(WearSync.KEY_USE_WATCH_LOCATION, locationSource == LocationSource.WATCH.name)
