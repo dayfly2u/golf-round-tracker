@@ -187,7 +187,7 @@ fun RoundControlScreen(viewModel: RoundStateViewModel) {
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("퍼팅: ${state.strokesPutt} ")
+            Text("숏/퍼팅: ${state.strokesPutt} ")
             Button(
                 onClick = { viewModel.sendAction(WearSync.ACTION_DECREMENT_PUTT) },
                 enabled = state.strokesPutt > 0,
