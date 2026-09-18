@@ -155,7 +155,11 @@ private val DOUBLE_BOGEY_COLOR = Color(0xFFFFCDD2) // 연한 빨강
 private val WORSE_THAN_DOUBLE_BOGEY_COLOR = Color(0xFFB71C1C) // 진한 빨강
 
 // GIR(그린 적중) 실패 — 그린까지 타수가 (파-2)를 넘긴 홀의 "그린 N" 표기를 눈에 띄게 강조.
-private val GIR_MISS_BG_COLOR = Color(0xFFC62828) // 진한 빨강
+// 숏어프로치가 있었다는 것 자체가 이미 GIR 실패를 뜻하므로(50m 이하 숏은 그린 밖에서
+// 친 샷), 그 정보가 " · 숏 N"으로 옆에 따로 표시되는 홀은 조금 연하게, 숏 없이
+// (그린까지 타수만으로) GIR을 놓친 홀은 진하게 — 강조 정도를 정보량에 맞춘다.
+private val GIR_MISS_BG_COLOR = Color(0xFFC62828) // 진한 빨강 — 숏 상세 없음
+private val GIR_MISS_WITH_SHORT_BG_COLOR = Color(0xFFE53935) // 조금 연한 빨강 — 숏 상세가 옆에 이미 표시됨
 private val GIR_MISS_TEXT_COLOR = Color.White
 
 private fun scoreRowColor(scoreToPar: Int): Color = when {
@@ -300,7 +304,14 @@ fun RoundSummaryScreen(
                                     color = GIR_MISS_TEXT_COLOR,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier
-                                        .background(GIR_MISS_BG_COLOR, RoundedCornerShape(4.dp))
+                                        .background(
+                                            if (hole.strokesShortGame > 0) {
+                                                GIR_MISS_WITH_SHORT_BG_COLOR
+                                            } else {
+                                                GIR_MISS_BG_COLOR
+                                            },
+                                            RoundedCornerShape(4.dp),
+                                        )
                                         .padding(horizontal = 6.dp, vertical = 1.dp),
                                 )
                             }
