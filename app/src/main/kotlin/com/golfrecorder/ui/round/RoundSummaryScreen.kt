@@ -120,7 +120,10 @@ class RoundSummaryViewModel(
             .sortedBy { record -> record.holeNumber }
             .map { record ->
                 val par = liveParByHole[record.holeNumber] ?: record.par
-                HoleResult(record.holeNumber, par, record.strokesToGreen, record.strokesGreenToHoleOut)
+                HoleResult(
+                    record.holeNumber, par, record.strokesToGreen, record.strokesGreenToHoleOut,
+                    strokesPutt = record.strokesPutt,
+                )
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -301,7 +304,14 @@ fun RoundSummaryScreen(
                                         .padding(horizontal = 6.dp, vertical = 1.dp),
                                 )
                             }
-                            Text(" · 숏/퍼팅 ${hole.strokesGreenToHoleOut}", color = textColor)
+                            // 숏어프로치를 실제로 입력한 홀만 나눠서 보여준다 — 대부분의
+                            // 홀은 전부 퍼팅이라, 매번 "숏 0 · 퍼팅 N"으로 보이면 오히려
+                            // 안 나눈 것보다 읽기 불편하다.
+                            if (hole.strokesShortGame > 0) {
+                                Text(" · 숏 ${hole.strokesShortGame} · 퍼팅 ${hole.strokesPutt}", color = textColor)
+                            } else {
+                                Text(" · 퍼팅 ${hole.strokesPutt}", color = textColor)
+                            }
                         }
                         Text("${hole.totalStrokes}타 (${formatToPar(hole.scoreToPar)})", color = textColor)
                     }
