@@ -176,6 +176,12 @@ fun CourseSelectScreen(
                 }
                 Switch(checked = useGoogleMap, onCheckedChange = { setUseGoogleMap(it) })
             }
+            Text(
+                "라운딩할 코스를 터치하시면 라운딩이 시작됩니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
             HorizontalDivider()
             if (courses.isEmpty()) {
                 Text(
